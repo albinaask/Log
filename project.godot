@@ -10,7 +10,7 @@ config_version=5
 
 [application]
 
-config/name="godot-logger"
+config/name="Log"
 run/main_scene="res://tests/logtest.tscn"
 config/features=PackedStringArray("4.1", "Forward Plus")
 config/icon="res://icon.png"
