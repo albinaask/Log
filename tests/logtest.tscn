@@ -5,7 +5,6 @@ script/source = "extends Node
 
 #Run scene to run tests.
 func _ready():
-	
 	##Print \"something\" to the main log channel
 	Log.info(\"something\")
 	Log.info(\"testing a value\", 5)

@@ -114,6 +114,11 @@ func _internal_log(message:String, values, log_level := LogLevel.INFO):
 		return
 	
 	var now = Time.get_datetime_dict_from_system(USE_UTC_TIME_FORMAT)
+	now["second"] = "%02d"%now["second"]
+	now["minute"] = "%02d"%now["minute"]
+	now["hour"] = "%02d"%now["hour"]
+	now["day"] = "%02d"%now["day"]
+	now["month"] = "%02d"%now["month"]
 	
 	var format_data := {
 			"log_name":_log_name,
