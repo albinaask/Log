@@ -5,17 +5,7 @@ extends Node
 
 class_name LogStream
 
-#Settings
-
-##Controls how the message should be formatted, follows String.format(), valid keys are: "level", "time", "log_name", "message"
-const LOG_MESSAGE_FORMAT = "{log_name}/{level} [lb]{hour}:{minute}:{second}[rb] {message}"
-
-
-##Whether to use the UTC time or the user
-const USE_UTC_TIME_FORMAT = false
-##Enables a breakpoint to mimic the godot behavior where the application doesn't crash when connected to debug environment, 
-##but instead freezed and shows the stack etc in the debug panel.
-const BREAK_ON_ERROR = true
+const Settings := preload("./settings.gd")
 
 ##Controls the behavior when a fatal error has been logged. 
 ##Edit to customize the behavior.
@@ -113,7 +103,7 @@ func _internal_log(message:String, values, log_level := LogLevel.INFO):
 	if current_log_level > log_level :
 		return
 	
-	var now = Time.get_datetime_dict_from_system(USE_UTC_TIME_FORMAT)
+	var now = Time.get_datetime_dict_from_system(ProjectSettings.get_setting(Settings.USE_UTC_TIME_FORMAT_KEY))
 	now["second"] = "%02d"%now["second"]
 	now["minute"] = "%02d"%now["minute"]
 	now["hour"] = "%02d"%now["hour"]
@@ -126,7 +116,7 @@ func _internal_log(message:String, values, log_level := LogLevel.INFO):
 			"level":LogLevel.keys()[log_level]
 		}
 	format_data.merge(now)
-	var msg = String(LOG_MESSAGE_FORMAT).format(format_data)
+	var msg = String(ProjectSettings.get_setting(Settings.LOG_MESSAGE_FORMAT_KEY)).format(format_data)
 	var stack = get_stack()
 	
 	match typeof(values):
@@ -180,7 +170,7 @@ func _internal_log(message:String, values, log_level := LogLevel.INFO):
 			if !stack.is_empty():#Aka is connected to debug server -> print to the editor console in addition to pushing the warning.
 				printerr(msg)
 				#Mimic the native godot behavior of halting execution upon error. 
-				if BREAK_ON_ERROR:
+				if ProjectSettings.get_setting(Settings.BREAK_ON_ERROR_KEY):
 					##Please go a few steps down the stack to find the errorous code, since you are currently inside the error handler.
 					breakpoint
 			print(_get_reduced_stack(stack))
