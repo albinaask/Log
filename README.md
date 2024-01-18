@@ -34,7 +34,7 @@ The simple solution for all your logging needs in GDScript. Note that this is a 
 # Installation
 
 1. Install from asset lib or drag the addons/logger folder from the downloaded zip into the project folder.
-2. Enable plugin.
+2. Enable plugin (Project > Project Settings > Plugins > Click on 'Enable' plugin checkbox)
 3. Reload editor. (For some reason Godot shows cryptic error messages, which disappears on reload).
 4. Done! 
 
