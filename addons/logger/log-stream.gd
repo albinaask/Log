@@ -5,23 +5,7 @@ extends Node
 
 class_name LogStream
 
-const Settings := preload("./settings.gd")
-
-##Controls the behavior when a fatal error has been logged. 
-##Edit to customize the behavior.
-static var DEFAULT_CRASH_BEHAVIOR := func():
-	#Restart the process to the main scene. (Uncomment if wanted), 
-	#note that we don't want to restart if we crash on init, then we get stuck in an infinite crash-loop, which isn't fun for anyone. 
-	#if get_tree().get_frame()>0:
-	#	var _ret = OS.create_process(OS.get_executable_path(), OS.get_cmdline_args())
-	
-	#Choose crash mechanism. Difference is that get_tree().quit() quits at the end of the frame, 
-	#enabling multiple fatal errors to be cast, printing multiple stack traces etc. 
-	#Warning regarding the use of OS.crash() in the docs can safely be regarded in this case.
-	OS.crash("Crash since falal error ocurred")
-	#get_tree().quit(-1)
-
-#end of settings
+const settings := preload("./settings.gd")
 
 enum LogLevel {
 	DEFAULT,
@@ -43,7 +27,13 @@ static var initialized = false
 ##Emits this signal whenever a message is recieved.
 signal log_message(level:LogLevel,message:String)
 
-func _init(log_name:String, min_log_level:=LogLevel.DEFAULT, crash_behavior:=DEFAULT_CRASH_BEHAVIOR):
+
+static func _static_init() -> void:
+	_ensure_setting_exists(settings.LOG_MESSAGE_FORMAT_KEY, settings.LOG_MESSAGE_FORMAT_DEFAULT_VALUE)
+	_ensure_setting_exists(settings.USE_UTC_TIME_FORMAT_KEY, settings.USE_UTC_TIME_FORMAT_DEFAULT_VALUE)
+	_ensure_setting_exists(settings.BREAK_ON_ERROR_KEY, settings.BREAK_ON_ERROR_DEFAULT_VALUE)
+
+func _init(log_name:String, min_log_level:=LogLevel.DEFAULT, crash_behavior:Callable = default_crash_behavior):
 	_log_name = log_name
 	current_log_level = min_log_level
 	_crash_behavior = crash_behavior
@@ -103,7 +93,7 @@ func _internal_log(message:String, values, log_level := LogLevel.INFO):
 	if current_log_level > log_level :
 		return
 	
-	var now = Time.get_datetime_dict_from_system(ProjectSettings.get_setting(Settings.USE_UTC_TIME_FORMAT_KEY))
+	var now = Time.get_datetime_dict_from_system(ProjectSettings.get_setting(settings.USE_UTC_TIME_FORMAT_KEY, settings.USE_UTC_TIME_FORMAT_DEFAULT_VALUE))
 	now["second"] = "%02d"%now["second"]
 	now["minute"] = "%02d"%now["minute"]
 	now["hour"] = "%02d"%now["hour"]
@@ -116,7 +106,7 @@ func _internal_log(message:String, values, log_level := LogLevel.INFO):
 			"level":LogLevel.keys()[log_level]
 		}
 	format_data.merge(now)
-	var msg = String(ProjectSettings.get_setting(Settings.LOG_MESSAGE_FORMAT_KEY)).format(format_data)
+	var msg:String = ProjectSettings.get_setting(settings.LOG_MESSAGE_FORMAT_KEY, settings.LOG_MESSAGE_FORMAT_DEFAULT_VALUE).format(format_data)
 	var stack = get_stack()
 	
 	match typeof(values):
@@ -170,13 +160,17 @@ func _internal_log(message:String, values, log_level := LogLevel.INFO):
 			if !stack.is_empty():#Aka is connected to debug server -> print to the editor console in addition to pushing the warning.
 				printerr(msg)
 				#Mimic the native godot behavior of halting execution upon error. 
-				if ProjectSettings.get_setting(Settings.BREAK_ON_ERROR_KEY):
+				if ProjectSettings.get_setting(settings.BREAK_ON_ERROR_KEY, settings.BREAK_ON_ERROR_DEFAULT_VALUE):
 					##Please go a few steps down the stack to find the errorous code, since you are currently inside the error handler.
 					breakpoint
 			print(_get_reduced_stack(stack))
-			print("tree: ")
-			print_tree()
-			print("")#Print empty line to space stack from new message
+			
+			#We want to access the main scene tree since this may be a custom logger that isn't in the main tree.
+			if Log.is_inside_tree():
+				print("Main tree: ")
+				Log.get_tree().root.print_tree_pretty()
+			print("")#Print empty line to mark new message
+			
 			if log_level == LogLevel.FATAL:
 				_crash_behavior.call()
 
@@ -209,3 +203,25 @@ func _get_external_log_level()->LogLevel:
 	else:
 		warn("The variable log-level is set to an illegal type, defaulting to info")
 		return LogLevel.INFO
+
+static func _ensure_setting_exists(setting: String, default_value) -> void:
+	if not ProjectSettings.has_setting(setting):
+		ProjectSettings.set_setting(setting, default_value)
+		ProjectSettings.set_initial_value(setting, default_value)
+
+		if ProjectSettings.has_method("set_as_basic"): # 4.0 backward compatibility
+			ProjectSettings.call("set_as_basic", setting, true)
+
+##Controls the behavior when a fatal error has been logged. 
+##Edit to customize the behavior.
+static func default_crash_behavior():
+	#Restart the process to the main scene. (Uncomment if wanted), 
+	#note that we don't want to restart if we crash on init, then we get stuck in an infinite crash-loop, which isn't fun for anyone. 
+	#if get_tree().get_frame()>0:
+	#	var _ret = OS.create_process(OS.get_executable_path(), OS.get_cmdline_args())
+	
+	#Choose crash mechanism. Difference is that get_tree().quit() quits at the end of the frame, 
+	#enabling multiple fatal errors to be cast, printing multiple stack traces etc. 
+	#Warning regarding the use of OS.crash() in the docs can safely be regarded in this case.
+	OS.crash("Crash since falal error ocurred")
+	#get_tree().quit(-1)
