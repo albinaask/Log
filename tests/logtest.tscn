@@ -11,7 +11,10 @@ func _ready():
 	_break_on_error_current_val = ProjectSettings.get_setting(Log.settings.BREAK_ON_ERROR_KEY)
 	
 	##Print \"something\" to the main log channel
+	var start = Time.get_ticks_usec()
 	Log.info(\"something\")
+	var end = Time.get_ticks_usec()
+	print(\"a log message takes \" + str(end-start) + \" us\")
 	Log.info(\"testing a value\", 5)
 	Log.info(\"testing more values\", {\"bar\":Vector3(1,2,3)})
 	#Does not show since the default minimum log level for a given logstream is set to info, and debug < info.
