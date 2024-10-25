@@ -40,32 +40,32 @@ func _init(log_name:String, min_log_level:=LogLevel.DEFAULT, crash_behavior:Call
 	_crash_behavior = crash_behavior
 
 ##prints a message to the log at the debug level.
-func debug(message, values={}):
+func debug(message:String,values:Variant=null):
 	call_thread_safe("_internal_log", message, values, LogLevel.DEBUG)
 
 ##Shorthand for debug
-func dbg(message:String,values={}):
+func dbg(message:String,values:Variant=null):
 	call_thread_safe("_internal_log", message, values, LogLevel.DEBUG)
 
 ##prints a message to the log at the info level.
-func info(message:String,values={}):
+func info(message:String,values:Variant=null):
 	call_thread_safe("_internal_log", message, values)
 
 ##prints a message to the log at the warning level.
-func warn(message:String,values={}):
+func warn(message:String,values:Variant=null):
 	call_thread_safe("_internal_log", message, values, LogLevel.WARN)
 
 ##Prints a message to the log at the error level.
-func error(message:String,values={}):
+func error(message:String,values:Variant=null):
 	call_thread_safe("_internal_log", message, values, LogLevel.ERROR)
 
 ##Shorthand for error
-func err(message:String,values={}):
+func err(message:String,values:Variant=null):
 	call_thread_safe("_internal_log", message, values, LogLevel.ERROR)
 
 ##Prints a message to the log at the fatal level, exits the application 
 ##since there has been a fatal error.
-func fatal(message:String,values={}):
+func fatal(message:String,values:Variant=null):
 	call_thread_safe("_internal_log", message, values, LogLevel.FATAL)
 
 ##Throws an error if err_code is not of value "OK" and appends the error code string.
