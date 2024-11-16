@@ -3,7 +3,7 @@ extends EditorPlugin
 
 
 
-func _enter_tree():
+func _enable_plugin():
 	
 	
 	#make sure log-stream is loaded to prevent godot error.
@@ -11,5 +11,5 @@ func _enter_tree():
 	add_autoload_singleton("Log", "res://addons/logger/logger.gd")
 
 
-func _exit_tree():
+func _disable_plugin():
 	remove_autoload_singleton("Log")
