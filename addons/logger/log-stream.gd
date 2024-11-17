@@ -18,11 +18,7 @@ enum LogLevel {
 
 var current_log_level:LogLevel = LogLevel.INFO:set= _set_level
 var _log_name:String
-var _print_action:Callable
 var _crash_behavior
-
-static var _log_file:FileAccess
-static var initialized = false
 
 ##Emits this signal whenever a message is recieved.
 signal log_message(level:LogLevel,message:String)
@@ -203,6 +199,7 @@ func _get_reduced_stack(stack:Array)->String:
 	return stack_trace_message
 
 ##Internal method.
+##TODO: Create a setting that can hold a global default.
 func _set_level(level:LogLevel):
 	level = _get_external_log_level() if level == LogLevel.DEFAULT else level
 	info("setting log level to " + LogLevel.keys()[level])
