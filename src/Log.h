@@ -5,6 +5,8 @@
 #include <mutex.hpp>
 #include <thread.hpp>
 #include <time.hpp>
+#include <os.hpp>
+#include <json.hpp>
 
 #ifndef LOG_H
 #define LOG_H
@@ -44,23 +46,18 @@ private:
     const String PRINT_TREE_KEY = LOG_SETTING_LOC + String("print_tree_on_error");
     const bool PRINT_TREE_DEFAULT_VALUE = false;
 
-    Dictionary log_names = {};
     LogLevel current_log_level;
     String log_name;
     Callable crash_behaviour;
     Signal logged_message;
     
-    struct LogEntryData{
-        String log_name;
-        String message;
-        LogLevel level;
-        Array other_values_to_be_printed;
-    };
-    
+    static Dictionary log_names;
     static bool first_time_init;
     static Ref<Mutex> log_mutex;
     static Ref<Thread> log_thread;
-    static Vector<LogEntryData> log_buffer;
+    static TypedArray<Array> log_buffer;
+	static int instance_count;
+	static bool shutting_down;
 
     void ensure_setting_exists(String setting_name, Variant default_value){
         if(!ProjectSettings::get_singleton()->has_setting(setting_name)){
@@ -74,22 +71,37 @@ private:
         if (level == LogLevel::DEFAULT){
             error(message, other_values_to_be_printed);
         }else if (level >= current_log_level) {
+            Array data = Array();
+			data.append((int)level);
+			data.append(message);
+			data.append_array(other_values_to_be_printed);
             log_mutex->lock();
-            LogEntryData data = {log_name, message, current_log_level, Array()};
-            log_buffer.push_back(data);
+            log_buffer.append(data);
             log_mutex->unlock();    
         }
     }
 
     void async_log(){
-        log_mutex->lock();
-        while(!log_buffer.is_empty()){
-            LogEntryData data = log_buffer[0];
-            log_buffer.remove_at(0);
-            log_mutex->unlock();
-            String format_string = ProjectSettings::get_singleton()->get(LOG_MESSAGE_FORMAT_KEY);
-            String msg = format_string.format(get_format_data(data.message, data.level));
-        }
+		
+		while(true){
+			while(!log_buffer.is_empty()){
+				log_mutex->lock();
+				Array data = log_buffer.pop_front();
+				log_mutex->unlock();
+				LogLevel level = LogLevel((int)data.pop_front());
+				String message = String(data.pop_front());
+
+				String format_string = ProjectSettings::get_singleton()->get(LOG_MESSAGE_FORMAT_KEY);
+				String msg = format_string.format(get_format_data(message, level));
+
+			}
+			if(shutting_down){
+				return;
+			}else{
+				OS::get_singleton()->delay_msec(10);
+			}
+		}
+
     }
 
     Dictionary get_format_data(String msg, LogLevel level){
@@ -119,52 +131,84 @@ private:
     String stringify_value(Variant value){
         switch (value.get_type())
         {
-        case Variant::Type::NIL:
+		case Variant::Type::STRING:
+			return value;
+		case Variant::Type::NIL:
             return "";
         case Variant::Type::ARRAY:
             {
                 String msg = "[";
                 Array array = Array(value);
                 for(int i = 0; i < array.size(); i++){
-                    
+                    Variant value = array[i];
+					msg += "\t" + stringify_value(value) + "\n";
                 }
-                return msg;
+                return msg + "]";
             }
+		case Variant::Type::DICTIONARY:
+			{
+				String msg = "{";
+				Dictionary dict = Dictionary(value);
+				for(int i = 0; i < dict.size(); i++){
+					Variant key = dict.keys()[i];
+					Variant value = dict.values()[i];
+					msg += "\t" + stringify_value(key) + ": " + stringify_value(value) + "\n";
+				}
+				return msg + "}";
+			}
+		case Variant::Type::OBJECT:
+			return stringify_object(value);
         default:
-            break;
+            return (String) value;
         }
     }
 
-    String stringify_object(){
-        return "";
+
+
+    String stringify_object(Object *obj){
+        String class_name = obj->get_class();
+		
+		TypedArray<Dictionary> properties = obj->get_property_list();
+		return "";
     }
 public:
     
     LogStream(String log_name, LogLevel level=LogLevel::DEFAULT, Callable crash_behaviour=Callable()){
-        log_names[LogLevel::DEBUG] = "Debug";
-        log_names[LogLevel::INFO] = "Info";
-        log_names[LogLevel::WARN] = "Warn";
-        log_names[LogLevel::ERROR] = "Error";
-        log_names[LogLevel::FATAL] = "Fatal";
-        
         if(!first_time_init){
             first_time_init = true;
-            ensure_setting_exists(LOG_MESSAGE_FORMAT_KEY, LOG_MESSAGE_FORMAT_DEFAULT_VALUE);
+            
+			ensure_setting_exists(LOG_MESSAGE_FORMAT_KEY, LOG_MESSAGE_FORMAT_DEFAULT_VALUE);
             ensure_setting_exists(USE_UTC_TIME_FORMAT_KEY, USE_UTC_TIME_FORMAT_DEFAULT_VALUE);
             ensure_setting_exists(BREAK_ON_ERROR_KEY, BREAK_ON_ERROR_DEFAULT_VALUE);
             ensure_setting_exists(PRINT_TREE_KEY, PRINT_TREE_DEFAULT_VALUE);
             
+			log_names = Dictionary();
+			log_names[LogLevel::DEBUG] = "Debug";
+			log_names[LogLevel::INFO] = "Info";
+			log_names[LogLevel::WARN] = "Warn";
+			log_names[LogLevel::ERROR] = "Error";
+			log_names[LogLevel::FATAL] = "Fatal";
+
+			shutting_down = false;
+			instance_count = 0;
             log_mutex = Ref<Mutex>();
             log_thread = Ref<Thread>();
-            log_buffer = Vector<LogEntryData>();
+            log_buffer = TypedArray<Array>();
             log_thread->start(Callable(this, "async_log"));
         }
 
+		instance_count++;
         this->log_name = log_name;
         this->current_log_level = level;
         this->crash_behaviour = crash_behaviour;
     }
-    ~LogStream(){}
+    ~LogStream(){
+		instance_count--;
+		if (instance_count == 0){
+			shutting_down = true;
+			log_thread->wait_to_finish();
+		}
+	}
     
     inline void debug(String message, Array other_values_to_be_printed=Array()){internal_log(message, LogLevel::DEBUG, other_values_to_be_printed);}
     inline void info(String message, Array other_values_to_be_printed=Array()){internal_log(message, LogLevel::INFO, other_values_to_be_printed);}
@@ -190,11 +234,11 @@ public:
 protected:
     static void _bind_methods(){
         ClassDB::bind_method(D_METHOD("set_level", "current_log_level"), &LogStream::set_level);
-        ClassDB::bind_method(D_METHOD("debug", "message"), &LogStream::debug);
-        ClassDB::bind_method(D_METHOD("info", "message"), &LogStream::info);
-        ClassDB::bind_method(D_METHOD("warn", "message"), &LogStream::warn);
-        ClassDB::bind_method(D_METHOD("error", "message"), &LogStream::error);
-        ClassDB::bind_method(D_METHOD("fatal", "message"), &LogStream::fatal);
+        ClassDB::bind_method(D_METHOD("debug", "message", "other_values_to_be_printed"), &LogStream::debug);
+        ClassDB::bind_method(D_METHOD("info", "message", "other_values_to_be_printed"), &LogStream::info);
+        ClassDB::bind_method(D_METHOD("warn", "message", "other_values_to_be_printed"), &LogStream::warn);
+        ClassDB::bind_method(D_METHOD("error", "message", "other_values_to_be_printed"), &LogStream::error);
+        ClassDB::bind_method(D_METHOD("fatal", "message", "other_values_to_be_printed"), &LogStream::fatal);
     }
 };
 #endif
