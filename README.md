@@ -76,6 +76,10 @@ The fatal error level however (`Log.fatal("Message")`) also kills the program af
 In bigger projects you may want to have info about where messages are comming from and control the granularity independently by part of the project so you only show a few relevant debug messages among hundreds. This is solved by the concept of different streams. The idea is that you create one per project partition.
 
 ```
+
+# automatically uses the name of the script
+var my_logger = LogStream.new(self)
+
 var file_stream = LogStream.new("IO")
 var networking_stream = LogStream.new("Networking")
 
@@ -146,6 +150,24 @@ func do_something():
  	Log.current_log_level = Log.LogLevel.DEBUG
   	Log.debug("However this message will")
 ```
+
+You can even define default log level a specific log stream would use in `settings.gd`. This dict is used while contructing new loggers, and if a level is defined here, and none is passed in the constructor, this will be used
+```
+# settings.gd
+
+const DEFAULT_LEVELS = {
+    "my_script": LogStream.LogLevel.DEBUG
+}
+
+# my_script.gd
+
+var logger = LogStream.new(self)
+
+var _ready():
+	logger.debug("this will log")
+
+```
+
 
 ## Formatting log messages
 
