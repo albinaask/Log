@@ -18,3 +18,7 @@ const BREAK_ON_ERROR_DEFAULT_VALUE = true
 ##Whether to dump the tree to the log on error.
 const PRINT_TREE_ON_ERROR_KEY = "addons/Log/print_tree_on_error"
 const PRINT_TREE_ON_ERROR_DEFAULT_VALUE = false
+
+const DEFAULT_LEVELS = {
+	# "script_name": LevelStream.LogLevel.DEBUG
+}
