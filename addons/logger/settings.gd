@@ -3,7 +3,7 @@
 ## Controls how the message should be formatted, follows String.format(), valid keys are: "level", "time", "log_name", "message"
 const LOG_MESSAGE_FORMAT_KEY = "addons/Log/log_message_format"
 ##BBCode friendly, aka any BBCode may be inserted here.
-const LOG_MESSAGE_FORMAT_DEFAULT_VALUE = "{log_name}/{level} [lb]{hour}:{minute}:{second}[rb] {message}"
+const LOG_MESSAGE_FORMAT_DEFAULT_VALUE = "{log_name}/{level} [lb]{hour}:{minute}:{second}[rb] {script}:{function}:{line} {message}"
 
 ## Whether to use the UTC time or the user
 const USE_UTC_TIME_FORMAT_KEY = "addons/Log/use_utc_time_format"

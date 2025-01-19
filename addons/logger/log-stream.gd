@@ -156,10 +156,15 @@ func _get_format_data(msg:String, lvl:LogLevel)->Dictionary:
 	now["day"] = "%02d"%now["day"]
 	now["month"] = "%02d"%now["month"]
 	
+	var call = get_stack()[3]
+	var script = call["source"].split("/")[-1]
 	var format_data := {
 			"log_name":_log_name,
 			"message":msg,
-			"level":LogLevel.keys()[lvl]
+			"level":LogLevel.keys()[lvl],
+			"script": script,
+			"function": call["function"],
+            "line": call["line"]
 		}
 	format_data.merge(now)
 	return format_data
