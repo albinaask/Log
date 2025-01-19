@@ -27,6 +27,7 @@ static var initialized = false
 ##Emits this signal whenever a message is recieved.
 signal log_message(level:LogLevel,message:String)
 
+static var LOGGERS = {}
 
 static func _static_init() -> void:
 	_ensure_setting_exists(settings.LOG_MESSAGE_FORMAT_KEY, settings.LOG_MESSAGE_FORMAT_DEFAULT_VALUE)
@@ -34,13 +35,19 @@ static func _static_init() -> void:
 	_ensure_setting_exists(settings.BREAK_ON_ERROR_KEY, settings.BREAK_ON_ERROR_DEFAULT_VALUE)
 	_ensure_setting_exists(settings.PRINT_TREE_ON_ERROR_KEY, settings.PRINT_TREE_ON_ERROR_DEFAULT_VALUE)
 
-func _init(log_name_or_obj, min_log_level:=LogLevel.DEFAULT, crash_behavior:Callable = default_crash_behavior):
-	if log_name_or_obj is Object:
-		_log_name = _get_script_name(log_name_or_obj)
-	else:
-		_log_name = log_name_or_obj
+func _init(log_name: String, min_log_level := LogLevel.DEFAULT, crash_behavior: Callable = default_crash_behavior):
+	_log_name = log_name
 	current_log_level = settings.DEFAULT_LEVELS.get(_log_name) if settings.DEFAULT_LEVELS.has(_log_name) else min_log_level
 	_crash_behavior = crash_behavior
+
+static func create(log_name_or_obj, min_log_level:=LogLevel.DEFAULT, crash_behavior:Callable = default_crash_behavior):
+	var log_name = ""
+	if log_name_or_obj is Object:
+		log_name = log_name_or_obj.get_script().get_path().split("/")[-1].split(".")[0]
+	else:
+		log_name = log_name_or_obj
+
+	return LogStream.LOGGERS[log_name] if LogStream.LOGGERS.has(log_name) else LogStream.new(log_name, min_log_level, crash_behavior)
 
 ##prints a message to the log at the debug level.
 func debug(message:String,values:Variant=null):
@@ -204,18 +211,6 @@ func _get_reduced_stack(stack:Array)->String:
 		##TODO: test print_debug()
 		stack_trace_message = "No stack trace available, please run from within the editor or connect to a remote debug context."
 	return stack_trace_message
-
-
-func _get_script_name(obj: Object):
-	var base_properties = obj.get_script().get_base_script().get_script_property_list()
-	var my_properties = obj.get_script().get_script_property_list()
-	for prop in my_properties:
-		if not prop in base_properties and prop["name"].contains(".gd"):
-			return prop["name"].split(".")[0]
-
-	print("ERROR: savable script name not found")
-	return ""
-
 
 ##Internal method.
 func _set_level(level:LogLevel):

@@ -31,7 +31,7 @@ func _ready():
 	
 	#Create a new logstream that is independently controlled from main, muting every message below WARN. 
 	#(LogStream.LogLevel is equal to Log.LogLevel since Log is a LogStream).
-	var logger = LogStream.new(\"test logger\", LogStream.LogLevel.WARN, func():
+	var logger = LogStream.create(\"test logger\", LogStream.LogLevel.WARN, func():
 		#Reset old value so user don't get confused.
 		ProjectSettings.set_setting(Log.settings.BREAK_ON_ERROR_KEY, _break_on_error_current_val)
 		

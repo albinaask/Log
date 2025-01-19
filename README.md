@@ -78,10 +78,10 @@ In bigger projects you may want to have info about where messages are comming fr
 ```
 
 # automatically uses the name of the script
-var my_logger = LogStream.new(self)
+var my_logger = LogStream.create(self)
 
-var file_stream = LogStream.new("IO")
-var networking_stream = LogStream.new("Networking")
+var file_stream = LogStream.create("IO")
+var networking_stream = LogStream.create("Networking")
 
 func do_networking_stuff():
 	networking_stream.warn("No internet. Please connect to the internet for this feature to work")
