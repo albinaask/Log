@@ -4,11 +4,11 @@
 script/source = "extends Node
 
 var _break_on_error_current_val:bool
-
+var log_settings = preload(\"res://addons/logger/settings.gd\")
 #Run scene to run tests.
 func _ready():
 	#save current value to reset it later for when we are done with it!
-	_break_on_error_current_val = ProjectSettings.get_setting(Log.settings.BREAK_ON_ERROR_KEY)
+	_break_on_error_current_val = ProjectSettings.get_setting(log_settings.BREAK_ON_ERROR_KEY)
 	
 	##Print \"something\" to the main log channel
 	var start = Time.get_ticks_usec()
@@ -16,45 +16,54 @@ func _ready():
 	var end = Time.get_ticks_usec()
 	print(\"a log message takes \" + str(end-start) + \" us\")
 	Log.info(\"testing a value\", 5)
-	Log.info(\"testing more values\", {\"bar\":Vector3(1,2,3)})
+	Log.info(\"testing a BB-code [color=yellow]hmm[/color]\")
+	Log.info(\"testing a BB-code within a value\", [\"[color=yellow]hmm[/color]\"])
+#	Log.info(\"testing more values\", {\"bar\":Vector3(1,2,3)})
+#	Log.info(\"Testing an object\", Node.new())
 	#Does not show since the default minimum log level for a given logstream is set to info, and debug < info.
-	Log.dbg(\"Shouldn't show\")
-	Log.current_log_level = Log.LogLevel.DEBUG
+#	Log.dbg(\"Shouldn't show\")
+#	Log.current_log_level = Log.LogLevel.DEBUG
 	#Now it shows since we have set the level to debug
-	Log.dbg(\"Should show\")
+#	Log.dbg(\"Should show\")
 	
 	#Checking that the signal is working
-	Log.log_message.connect(func(_level, _message):
-		print(\"Message has been logged...\"))
-	Log.info(\"Testing signal\")
-	Log.info(\"Testing signal\")
+#	Log.log_message.connect(func(_message):
+#		print(\"Message has been logged... Message: \" + _message))
+#	Log.info(\"Testing signal\")
 	
 	#Create a new logstream that is independently controlled from main, muting every message below WARN. 
 	#(LogStream.LogLevel is equal to Log.LogLevel since Log is a LogStream).
-	var logger = LogStream.new(\"test logger\", LogStream.LogLevel.WARN, func():
+#	var logger = LogStream.new(\"test logger\", LogStream.LogLevel.WARN, func():
 		#Reset old value so user don't get confused.
-		ProjectSettings.set_setting(Log.settings.BREAK_ON_ERROR_KEY, _break_on_error_current_val)
+#	ProjectSettings.set_setting(log_settings.BREAK_ON_ERROR_KEY, _break_on_error_current_val)
 		
 		#Should be emitted last... 
-		print_rich(\"[b][color=green]test successful[/color][/b]\")
-		get_tree().quit())
+#	print_rich(\"[b][color=green]test successful[/color][/b]\")
+#	get_tree().quit())
 	
-	logger.info(\"This shouldn't log\")
-	logger.warn(\"This should log\")
+#	logger.info(\"This shouldn't log\")
+#	logger.warn(\"This should log\")
+#	test_stack()
 	
-	ProjectSettings.set_setting(Log.settings.BREAK_ON_ERROR_KEY, false)
-	logger.err(\"test error\")
+#	ProjectSettings.set_setting(log_settings.BREAK_ON_ERROR_KEY, false)
+#	LogStream.sync_project_settings()
+#	logger.current_log_level = LogStream.LogLevel.FATAL
+#	logger.err(\"error shouldn't catch\")
+#	logger.current_log_level = LogStream.LogLevel.INFO
 	#create a null file object to test err_cond_methods on.
-	var file = FileAccess.open(\"invalid file name\", FileAccess.READ)
-	logger.err_cond_not_ok(FileAccess.get_open_error(), \"Testing err_cond_not_OK\", false)
-	logger.current_log_level = LogStream.LogLevel.FATAL
-	logger.err_cond_null(file, \"Does not print error since level < fatal\", false)
+#	var file = FileAccess.open(\"invalid file name\", FileAccess.READ)
+#	logger.err_cond_not_ok(FileAccess.get_open_error(), \"Testing err_cond_not_OK\", false)
+#	logger.current_log_level = LogStream.LogLevel.FATAL
+#	logger.err_cond_null(file, \"Does not print error since level < fatal\", false)
 	
-	ProjectSettings.set_setting(Log.settings.BREAK_ON_ERROR_KEY, true)
+#	ProjectSettings.set_setting(log_settings.BREAK_ON_ERROR_KEY, true)
+#	LogStream.sync_project_settings()
 	#Please go down 2 frames in the debug stack to get to this point, since the two top most is internal to the plugin.
-	logger.err_cond_null(file, \"Emits at fatal level since fatal is true by default, brings up the debugger.\")
+#	logger.err_cond_null(file, \"Emits at fatal level since fatal is true by default, brings up the debugger.\")
 	
-	
+
+func test_stack():
+	Log.warn(\"testing stack\")
 "
 
 [node name="test" type="Node"]

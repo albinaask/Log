@@ -5,5 +5,4 @@ extends LogStream
 
 
 func _init():
-	super("Main", LogLevel.DEFAULT)
-
+	super("Main")

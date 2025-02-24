@@ -5,229 +5,131 @@ extends Node
 
 class_name LogStream
 
-const settings := preload("./settings.gd")
-
 enum LogLevel {
-	DEFAULT,
-	DEBUG,
-	INFO,
-	WARN,
-	ERROR,
-	FATAL,
+	DEBUG = 0,
+	INFO = 1,
+	WARN = 2,
+	ERROR = 3,
+	FATAL= 4,
 }
 
-var current_log_level:LogLevel = LogLevel.INFO:set= _set_level
 var _log_name:String
-var _print_action:Callable
-var _crash_behavior
-
-static var _log_file:FileAccess
-static var initialized = false
+var _crash_behavior:Callable
 
 ##Emits this signal whenever a message is recieved.
 signal log_message(level:LogLevel,message:String)
 
+##Represents the minimum level of messages that will be logged.
+var current_log_level:LogLevel = LogLevel.INFO:set= _set_level
 
-static func _static_init() -> void:
-	_ensure_setting_exists(settings.LOG_MESSAGE_FORMAT_KEY, settings.LOG_MESSAGE_FORMAT_DEFAULT_VALUE)
-	_ensure_setting_exists(settings.USE_UTC_TIME_FORMAT_KEY, settings.USE_UTC_TIME_FORMAT_DEFAULT_VALUE)
-	_ensure_setting_exists(settings.BREAK_ON_ERROR_KEY, settings.BREAK_ON_ERROR_DEFAULT_VALUE)
-	_ensure_setting_exists(settings.PRINT_TREE_ON_ERROR_KEY, settings.PRINT_TREE_ON_ERROR_DEFAULT_VALUE)
-
-func _init(log_name:String, min_log_level:=LogLevel.DEFAULT, crash_behavior:Callable = default_crash_behavior):
+func _init(log_name:String, min_log_level:LogLevel=-1, crash_behavior:Callable = default_crash_behavior):
 	_log_name = log_name
+	_LogInternalPrinter._settings._ensure_setting_exists(_LogInternalPrinter._settings.STREAM_LEVEL_SETTING_LOCATION+_log_name, LogLevel.INFO,
+	{
+		"type":TYPE_INT,
+		"hint":PROPERTY_HINT_ENUM,
+		"hint_string":LogLevel.keys().reduce(func(a,b):return a + ", " + b).to_lower()
+	})
 	current_log_level = min_log_level
 	_crash_behavior = crash_behavior
 
+func _ready() -> void:
+	if !get_tree().root.tree_exiting.is_connected(_LogInternalPrinter._cleanup):
+		get_tree().root.tree_exiting.connect(_LogInternalPrinter._cleanup)
+
 ##prints a message to the log at the debug level.
 func debug(message:String,values:Variant=null):
-	call_thread_safe("_internal_log", message, values, LogLevel.DEBUG)
+	_LogInternalPrinter._push_to_queue(_log_name, message, LogLevel.DEBUG, current_log_level, _crash_behavior, log_message.emit, values)
 
 ##Shorthand for debug
 func dbg(message:String,values:Variant=null):
-	call_thread_safe("_internal_log", message, values, LogLevel.DEBUG)
+	_LogInternalPrinter._push_to_queue(_log_name, message, LogLevel.DEBUG, current_log_level, _crash_behavior, log_message.emit, values)
 
 ##prints a message to the log at the info level.
 func info(message:String,values:Variant=null):
-	call_thread_safe("_internal_log", message, values)
+	_LogInternalPrinter._push_to_queue(_log_name, message, LogLevel.INFO, current_log_level, _crash_behavior, log_message.emit, values)
 
 ##prints a message to the log at the warning level.
 func warn(message:String,values:Variant=null):
-	call_thread_safe("_internal_log", message, values, LogLevel.WARN)
+	_LogInternalPrinter._push_to_queue(_log_name, message, LogLevel.WARN, current_log_level, _crash_behavior, log_message.emit, values)
 
 ##Prints a message to the log at the error level.
 func error(message:String,values:Variant=null):
-	call_thread_safe("_internal_log", message, values, LogLevel.ERROR)
+	_LogInternalPrinter._push_to_queue(_log_name, message, LogLevel.ERROR, current_log_level, _crash_behavior, log_message.emit, values)
 
 ##Shorthand for error
 func err(message:String,values:Variant=null):
-	call_thread_safe("_internal_log", message, values, LogLevel.ERROR)
+	_LogInternalPrinter._push_to_queue(_log_name, message, LogLevel.ERROR, current_log_level, _crash_behavior, log_message.emit, values)
 
 ##Prints a message to the log at the fatal level, exits the application 
 ##since there has been a fatal error.
 func fatal(message:String,values:Variant=null):
-	call_thread_safe("_internal_log", message, values, LogLevel.FATAL)
+	_LogInternalPrinter._push_to_queue(_log_name, message, LogLevel.FATAL, current_log_level, _crash_behavior, log_message.emit, values)
 
 ##Throws an error if err_code is not of value "OK" and appends the error code string.
-func err_cond_not_ok(err_code:Error, message:String, fatal:=true, other_values_to_be_printed={}):
+func err_cond_not_ok(err_code:Error, message:String, fatal:=true, other_values_to_be_printed=null):
 	if err_code != OK:
-		call_thread_safe("_internal_log", message + "" if message.ends_with(".") else "." + " Error string: " + error_string(err_code), other_values_to_be_printed, LogLevel.FATAL if fatal else LogLevel.ERROR)
+		_LogInternalPrinter._push_to_queue(_log_name, message + "" if message.ends_with(".") else "." + " Error string: " + error_string(err_code), LogLevel.FATAL if fatal else LogLevel.ERROR, current_log_level, _crash_behavior, log_message.emit, other_values_to_be_printed)
 
 ##Throws an error if the "statement" passed is false. Handy for making code "free" from if statements.
 func err_cond_false(statement:bool, message:String, fatal:=true, other_values_to_be_printed={}):
 	if !statement:
-		call_thread_safe("_internal_log", message, other_values_to_be_printed, LogLevel.FATAL if fatal else LogLevel.ERROR)
+		_LogInternalPrinter._push_to_queue(_log_name, message, LogLevel.FATAL if fatal else LogLevel.ERROR, current_log_level, _crash_behavior, log_message.emit, other_values_to_be_printed)
 
 ##Throws an error if argument == null
-func err_cond_null(arg, message:String, fatal:=true, other_values_to_be_printed={}):
+func err_cond_null(arg, message:String, fatal:=true, other_values_to_be_printed=null):
 	if arg == null:
-		call_thread_safe("_internal_log", message, other_values_to_be_printed, LogLevel.FATAL if fatal else LogLevel.ERROR)
+			_LogInternalPrinter._push_to_queue(_log_name, message, LogLevel.FATAL if fatal else LogLevel.ERROR, current_log_level, _crash_behavior, log_message.emit, other_values_to_be_printed)
 
 ##Throws an error if the arg1 isn't equal to arg2. Handy for making code "free" from if statements.
-func err_cond_not_equal(arg1, arg2, message:String, fatal:=true, other_values_to_be_printed={}):
-	#the type Color is weird in godot, so therefore this edgecase...
+func err_cond_not_equal(arg1, arg2, message:String, fatal:=true, other_values_to_be_printed=null):
+	#The type 'Color' is weird in godot, so therefore this edgecase...
 	if (arg1 is Color && arg2 is Color && !arg1.is_equal_approx(arg2)) || arg1 != arg2:
-		call_thread_safe("_internal_log", str(arg1) + " != " + str(arg2) + ", not allowed. " + message, other_values_to_be_printed, LogLevel.FATAL if fatal else LogLevel.ERROR)
-
-##Main internal logging method, please use the methods above instead, since this is not thread safe.
-func _internal_log(message:String, values, log_level := LogLevel.INFO):
-	if current_log_level > log_level :
-		return
-	if log_level == LogLevel.DEFAULT:
-		err("Can't log at 'default' level, this level is only used as filter")
-	##Format message string
-	var format_str:String = ProjectSettings.get_setting(settings.LOG_MESSAGE_FORMAT_KEY, settings.LOG_MESSAGE_FORMAT_DEFAULT_VALUE)
-	message = format_str.format(_get_format_data(message, log_level))
-	##Tac on passed values
-	message += _stringify_values(values)
-	
-	var stack = get_stack()
-	emit_signal("log_message", log_level, message)
-	if stack.is_empty():#Aka is connected to debug server -> print to the editor console in addition to pushing the warning.
-		_log_mode_console(message, log_level)
-	else:
-		_log_mode_editor(message, log_level, stack)	
-	##AKA, level is error or fatal, the main tree is accessible and we want to print it.
-	if log_level > 3 && Log.is_inside_tree() && ProjectSettings.get_setting(settings.PRINT_TREE_ON_ERROR_KEY, settings.PRINT_TREE_ON_ERROR_DEFAULT_VALUE):
-		#We want to access the main scene tree since this may be a custom logger that isn't in the main tree.
-		print("Main tree: ")
-		Log.get_tree().root.print_tree_pretty()
-		print("")#Print empty line to mark new message
-	
-	if log_level == LogLevel.FATAL:
-		_crash_behavior.call()
-
-func _log_mode_editor(msg:String, lvl:LogLevel, stack:Array):
-	match lvl:
-		LogLevel.DEBUG:
-			print_rich("[color=gray]"+msg+"[/color]")
-		LogLevel.INFO:
-			print_rich(msg)
-		LogLevel.WARN:
-			print_rich("[color=yellow]"+msg+"[/color]")
-			push_warning(msg)
-			print(_get_reduced_stack(stack) + "\n")
-		_:#AKA error or fatal
-			push_error(msg)
-			msg = msg.replace("[lb]", "[").replace("[rb]", "]")
-			printerr(msg)
-			#Mimic the native godot behavior of halting execution upon error. 
-			if ProjectSettings.get_setting(settings.BREAK_ON_ERROR_KEY, settings.BREAK_ON_ERROR_DEFAULT_VALUE):
-			##Please go a few steps down the stack to find the errorous code, since you are currently inside the error handler.
-				breakpoint
-			print(_get_reduced_stack(stack))
-		
-
-func _log_mode_console(msg:String, lvl:LogLevel):
-	##remove any BBCodes
-	msg = msg.replace("[lb]", "[").replace("[rb]", "]")
-	if lvl < 3:
-		print(msg)
-	elif lvl == LogLevel.WARN:
-		push_warning(msg)
-	else:
-		push_error(msg)
-
-func _get_format_data(msg:String, lvl:LogLevel)->Dictionary:
-	var now = Time.get_datetime_dict_from_system(ProjectSettings.get_setting(settings.USE_UTC_TIME_FORMAT_KEY, settings.USE_UTC_TIME_FORMAT_DEFAULT_VALUE))
-	now["second"] = "%02d"%now["second"]
-	now["minute"] = "%02d"%now["minute"]
-	now["hour"] = "%02d"%now["hour"]
-	now["day"] = "%02d"%now["day"]
-	now["month"] = "%02d"%now["month"]
-	
-	var format_data := {
-			"log_name":_log_name,
-			"message":msg,
-			"level":LogLevel.keys()[lvl]
-		}
-	format_data.merge(now)
-	return format_data
-
-func _stringify_values(values)->String:
-	match typeof(values):
-		TYPE_NIL:
-			return ""
-		TYPE_ARRAY:
-			var msg = "["
-			for k in values:
-				msg += "{k}, ".format({"k":JSON.stringify(k)})
-			return msg + "]"
-		TYPE_DICTIONARY:
-			var msg = "{"
-			for k in values:
-				if typeof(values[k]) == TYPE_OBJECT && values[k] != null:
-					msg += '"{k}":{v},'.format({"k":k,"v":JSON.stringify(JsonData.to_dict(values[k],false))})
-				else:
-					msg += '"{k}":{v},'.format({"k":k,"v":JSON.stringify(values[k])})
-			return msg+"}"
-		TYPE_PACKED_BYTE_ARRAY:
-			return JSON.stringify(JsonData.unmarshal_bytes_to_dict(values))
-		TYPE_OBJECT:
-			return JSON.stringify(JsonData.to_dict(values,false))
-		_:
-			return JSON.stringify(values)
-
-func _get_reduced_stack(stack:Array)->String:
-	var stack_trace_message:=""
-	
-	if !stack.is_empty():#aka has stack trace.
-		stack_trace_message += "at:\n"
-		
-		for i in range(stack.size()-2):
-			var entry = stack[stack.size()-1-i]
-			stack_trace_message += "\t" + entry["source"] + ":" + str(entry["line"]) + " in func " + entry["function"] + "\n"
-	else:
-		##TODO: test print_debug()
-		stack_trace_message = "No stack trace available, please run from within the editor or connect to a remote debug context."
-	return stack_trace_message
+		_LogInternalPrinter._push_to_queue(_log_name, str(arg1) + " != " + str(arg2) + ", not allowed. " + message, LogLevel.FATAL if fatal else LogLevel.ERROR, current_log_level, _crash_behavior, log_message.emit, other_values_to_be_printed)	
 
 ##Internal method.
 func _set_level(level:LogLevel):
-	level = _get_external_log_level() if level == LogLevel.DEFAULT else level
+	level = _get_external_log_level() if level == -1 else level
 	info("setting log level to " + LogLevel.keys()[level])
 	current_log_level = level
 
 ##Internal method.
 func _get_external_log_level()->LogLevel:
-	var key = Config.get_var("log-level","info").to_upper()
-	if LogLevel.keys().has(key):
-		return LogLevel[key]
+	var cmd_line_level = Config.get_var("log-level","default").to_upper()
+	var project_settings_level = ProjectSettings.get_setting(_LogInternalPrinter._settings.STREAM_LEVEL_SETTING_LOCATION+_log_name)
+	if cmd_line_level.to_lower() != "default":
+		if LogLevel.keys().has(cmd_line_level.to_upper()):
+			return LogLevel[cmd_line_level]
+		else:
+			warn("The variable log-level is set to an illegal type, defaulting to info")
+			return LogLevel.INFO
 	else:
-		warn("The variable log-level is set to an illegal type, defaulting to info")
-		return LogLevel.INFO
+		return project_settings_level
 
-static func _ensure_setting_exists(setting: String, default_value) -> void:
-	if not ProjectSettings.has_setting(setting):
-		ProjectSettings.set_setting(setting, default_value)
-		ProjectSettings.set_initial_value(setting, default_value)
 
-		if ProjectSettings.has_method("set_as_basic"): # 4.0 backward compatibility
-			ProjectSettings.call("set_as_basic", setting, true)
+#make sure settings are synced without pulling them all the time. Not that this can take a tick or so.
+static func sync_project_settings()->void:
+	var settings = _LogInternalPrinter._settings
+	_LogInternalPrinter.BREAK_ON_ERROR = ProjectSettings.get_setting(settings.BREAK_ON_ERROR_KEY)
+	_LogInternalPrinter.PRINT_TREE_ON_ERROR = ProjectSettings.get_setting(settings.PRINT_TREE_ON_ERROR_KEY)
+	_LogInternalPrinter.CYCLE_BREAK_TIME = ProjectSettings.get_setting(settings.MIN_PRINTING_CYCLE_TIME_KEY)
+	_LogInternalPrinter.USE_UTC_TIME_FORMAT = ProjectSettings.get_setting(settings.USE_UTC_TIME_FORMAT_KEY)
+	_LogInternalPrinter.VALUE_PRIMER_STRING = settings._ensure_setting_exists(settings.VALUE_PRIMER_STRING_KEY, settings.VALUE_PRIMER_STRING_DEFAULT_VALUE)
+	#See _LogInternalPrinter.MESSAGE_FORMAT_STRINGS for details.
+	_LogInternalPrinter.MESSAGE_FORMAT_STRINGS = [
+		"",
+		settings._ensure_setting_exists(settings.DEBUG_MESSAGE_FORMAT_KEY, settings.DEBUG_MESSAGE_FORMAT_DEFAULT_VALUE),
+		settings._ensure_setting_exists(settings.INFO_MESSAGE_FORMAT_KEY, settings.INFO_MESSAGE_FORMAT_DEFAULT_VALUE),
+		settings._ensure_setting_exists(settings.WARNING_MESSAGE_FORMAT_KEY, settings.WARNING_MESSAGE_FORMAT_DEFAULT_VALUE),
+		settings._ensure_setting_exists(settings.ERROR_MESSAGE_FORMAT_KEY, settings.ERROR_MESSAGE_FORMAT_DEFAULT_VALUE),
+		settings._ensure_setting_exists(settings.FATAL_MESSAGE_FORMAT_KEY, settings.FATAL_MESSAGE_FORMAT_DEFAULT_VALUE)
+	]
 
 ##Controls the behavior when a fatal error has been logged. 
 ##Edit to customize the behavior.
 static func default_crash_behavior():
+	_LogInternalPrinter._cleanup()
+	print("Crashing due to Fatal error.")
 	#Restart the process to the main scene. (Uncomment if wanted), 
 	#note that we don't want to restart if we crash on init, then we get stuck in an infinite crash-loop, which isn't fun for anyone. 
 	#if get_tree().get_frame()>0:

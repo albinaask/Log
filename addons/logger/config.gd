@@ -1,5 +1,7 @@
 extends Node
 
+
+##Class for interacting with command line arguments and environement variables.
 class_name Config
 
 static func get_arguments() -> Dictionary:

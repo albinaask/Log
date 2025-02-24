@@ -6,12 +6,17 @@ The simple solution for all your logging needs in GDScript. Note that this is a 
 
 # Features
 
-## Original
+## 2.0
 
-- Has a basic logger to print out Nodes,Objects,Arrays,Dictionarys etc.
-- Has support for easily reading env vars & cmd line args.
+- Logs asynchrounously to the main thread, this speeds up a call to log (on my machine) by a factor of 10-30.
+- Cleans the Log-Stream for easier reading of the API.
+- Adds additional customization for the format option to be able to show class, line number and function handle.
+- Adds settings for controlling the log level for each log stream from Project Settings.
+- Shifts most of Logs settings from a Singleton in code to be fully customizable through Project Settings.
+- Adapts and further integrates the still remaining legacy code.
+- Should be backwards compatible to 1.x, so no recoding needed.
 
-## New for the fork
+## 1.0
 
 - Adds multiple log streams so you can control the log level independently for different parts of your project.
 - Adds a fatal log level that causes your project to crash in a way that you can control.
@@ -20,8 +25,13 @@ The simple solution for all your logging needs in GDScript. Note that this is a 
 - Adds shorthand methods for debug & error.
 - Adds err_cond_... methods for quick error checking.
 - Adds a scripted breakpoint (optional in setting) so errors freeze the execution and shows relevant info in the godot debugger.
-- Adds support for multiple log files.
 - Adds a test scene that can be used as an example of how the plugin can be used.
+
+## Original repo
+
+- Has a basic logger to print out Nodes,Objects,Arrays,Dictionarys etc.
+- Has support for easily reading env vars & cmd line args.
+
 
 ## Example of usage
 
@@ -114,7 +124,7 @@ var null_var
 Log.err_cond_null(null_var, "null_var is null, this is forbidden")
 ```
 
-## err_cond_not_ok
+### err_cond_not_ok
 
 The method `LogStream.err_cond_not_ok` prints an error to the console if the passed variable (Which has to be of type [Error](https://docs.godotengine.org/en/stable/classes/class_%40globalscope.html#enum-globalscope-error)) is not equal to `Error.OK`, or just `OK` for short. E.g.:
 
@@ -126,11 +136,11 @@ Log.err_cond_not_ok(FileAccess.get_open_error(), "Unable to open file", true, pa
 will print the following:
 `Unable to open file. Error string: File not found`
 
-## err_cond_false
+### err_cond_false
 
 The method `LogStream.err_cond_false` prints an error to the console if the passed variable is equal to `false`
 
-## err_cond_not_equal
+### err_cond_not_equal
 
 The method `LogStream.err_cond_not_equal` prints an error to the console if the two passed variables are not equal to each other. follows the same rules as the `==` operator, aka a node that is duplicated is not equal to the original since they are two separate instances, but two strings containing the same characters in the same order are considered equal since GDScript handles them that way. 
 
@@ -140,12 +150,14 @@ The method `LogStream.err_cond_not_equal` prints an error to the console if the 
 
 The General idea is that you may want to filter messages based on relevance since logs of a big project can become pretty cluttered with info that isn't relevant to you at the moment or to the end user. What you can do is to set Log up so that for example only errors & Fatals are printed. You do this through setting the LogLevel of the relevant stream. The idea is that messages can be ranked by importance in the order Fatal>error>warning>info>debug. Setting the level to Info means that only messages with an importance Info or higher will show up in the log. Streams, including the main one are set to info by default. Therefore debug messages won't show up by default.
 
+This is done per stream by the user in the project settings under addons/logger/Streams.  
 ```
 func do_something():
 	Log.debug("This message will not show in the log")
  	Log.current_log_level = Log.LogLevel.DEBUG
   	Log.debug("However this message will")
 ```
+
 
 ## Formatting log messages
 
