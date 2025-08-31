@@ -5,15 +5,15 @@ extends RefCounted
 ##If modifications to the logging behaviour is required, this is the place to do it. 
 ##Generally, an entry is processed per message, and it is processed with _internal_log. 
 ##Using this and the methods that this calles should be a good start for editing.
-##They are called by a separate thread and thread safe between eachother. Storing data between the threads is done through the _LogEntry class.
+##They are called by a separate thread and thread safe between eachother. Storing data between the threads is done through the LogStream.LogEntry class.
 class_name _LogInternalPrinter
 
 ##Log uses two queues, one for writing intries to, and one for processing, that way, the thread is more independent and has potentially higher speed.
-static var _front_queue: Array[_LogEntry]
-static var _back_queue: Array[_LogEntry]
+static var _front_queue: Array[LogStream.LogEntry]
+static var _back_queue: Array[LogStream.LogEntry]
 static var _front_queue_size: int = 0
 
-const _settings := preload("./settings.gd")
+const _settings := preload("./LogSettings.gd")
 
 static var _log_mutex = Mutex.new()
 static var _log_thread = Thread.new()
@@ -22,31 +22,37 @@ static var _is_quitting = false
 ##Used for benchmarking the time it takes to log a message on the main thread. Microbe is WIP, but see github.com/albinaask/Microbe for more info.
 #static var push_microbe = Microbe.new("push to queue")
 
-##Settings are set in ProjectSettings. Look for Log and set them from there. See 'res://addons/logger/settings.gd' for explanations on what each setting do.
+##Settings are set in ProjectSettings. Look for Log and set them from there. See 'res://addons/logger/LogSettings.gd' for explanations on what each setting do.
 static var BREAK_ON_ERROR:bool = _settings._ensure_setting_exists(_settings.BREAK_ON_ERROR_KEY, _settings.BREAK_ON_ERROR_DEFAULT_VALUE)
 static var PRINT_TREE_ON_ERROR:bool = _settings._ensure_setting_exists(_settings.PRINT_TREE_ON_ERROR_KEY, _settings.PRINT_TREE_ON_ERROR_DEFAULT_VALUE)
 static var CYCLE_BREAK_TIME:int = _settings._ensure_setting_exists(_settings.MIN_PRINTING_CYCLE_TIME_KEY, _settings.MIN_PRINTING_CYCLE_TIME_DEFAULT_VALUE)
 static var USE_UTC_TIME_FORMAT:bool = _settings._ensure_setting_exists(_settings.USE_UTC_TIME_FORMAT_KEY, _settings.USE_UTC_TIME_FORMAT_DEFAULT_VALUE)
 static var GLOBAL_PATH_LIST = ProjectSettings.get_global_class_list()
 static var BB_CODE_REMOVER_REGEX = RegEx.new()
+static var BB_CODE_EXCLUDING_BRACKETS_REMOVER_REGEX = RegEx.new()
 static var VALUE_PRIMER_STRING:String = _settings._ensure_setting_exists(_settings.VALUE_PRIMER_STRING_KEY, _settings.VALUE_PRIMER_STRING_DEFAULT_VALUE)
 
 ##Note that these are in the same order as LogStream.LogLevel
-static var MESSAGE_FORMAT_STRINGS:Array[String] = [
-	_settings._ensure_setting_exists(_settings.DEBUG_MESSAGE_FORMAT_KEY, _settings.DEBUG_MESSAGE_FORMAT_DEFAULT_VALUE),
-	_settings._ensure_setting_exists(_settings.INFO_MESSAGE_FORMAT_KEY, _settings.INFO_MESSAGE_FORMAT_DEFAULT_VALUE),
-	_settings._ensure_setting_exists(_settings.WARNING_MESSAGE_FORMAT_KEY, _settings.WARNING_MESSAGE_FORMAT_DEFAULT_VALUE),
-	_settings._ensure_setting_exists(_settings.ERROR_MESSAGE_FORMAT_KEY, _settings.ERROR_MESSAGE_FORMAT_DEFAULT_VALUE),
-	_settings._ensure_setting_exists(_settings.FATAL_MESSAGE_FORMAT_KEY, _settings.FATAL_MESSAGE_FORMAT_DEFAULT_VALUE)
-]
+static var MESSAGE_FORMAT_STRINGS:Array[String]
 
 
 ##Every method in this class is static, therefore a static constructor is used.
 static func _static_init() -> void:
+	MESSAGE_FORMAT_STRINGS  = [
+		_settings._ensure_setting_exists(_settings.DEBUG_MESSAGE_FORMAT_KEY, _settings.DEBUG_MESSAGE_FORMAT_DEFAULT_VALUE),
+		_settings._ensure_setting_exists(_settings.INFO_MESSAGE_FORMAT_KEY, _settings.INFO_MESSAGE_FORMAT_DEFAULT_VALUE),
+		_settings._ensure_setting_exists(_settings.WARNING_MESSAGE_FORMAT_KEY, _settings.WARNING_MESSAGE_FORMAT_DEFAULT_VALUE),
+		_settings._ensure_setting_exists(_settings.ERROR_MESSAGE_FORMAT_KEY, _settings.ERROR_MESSAGE_FORMAT_DEFAULT_VALUE),
+		_settings._ensure_setting_exists(_settings.FATAL_MESSAGE_FORMAT_KEY, _settings.FATAL_MESSAGE_FORMAT_DEFAULT_VALUE)
+	]
+	
 	var queue_size = _settings._ensure_setting_exists(_settings.LOG_QUEUE_SIZE_KEY, _settings.LOG_QUEUE_SIZE_DEFAULT_VALUE)
+	queue_size = max(queue_size, 1)#Make sure queue size is at least 1.
+	
 	BB_CODE_REMOVER_REGEX.compile("\\[(lb|rb)\\]|\\[.*?\\]")
-
-	ProjectSettings.settings_changed.connect(LogStream.sync_project_settings)
+	BB_CODE_EXCLUDING_BRACKETS_REMOVER_REGEX.compile("\\[(?!(?:lb|rb)\\])[a-zA-Z0-9=_\\/]*+\\]")
+	if !ProjectSettings.settings_changed.is_connected(LogStream.sync_project_settings):
+		ProjectSettings.settings_changed.connect(LogStream.sync_project_settings)
 	if _log_thread.start(_process_logs, Thread.PRIORITY_LOW) != OK:
 		#TODO: update this to call _internal_log.
 		#TODO: Make Log able to log from same thread...
@@ -55,8 +61,8 @@ static func _static_init() -> void:
 	_front_queue.resize(queue_size)
 	_back_queue.resize(queue_size)
 	for i in range(queue_size):
-		_front_queue[i] = _LogEntry.new()
-		_back_queue[i] = _LogEntry.new()
+		_front_queue[i] = LogStream.LogEntry.new()
+		_back_queue[i] = LogStream.LogEntry.new()
 
 func _ns_push_to_queue(stream_name:String, message:String, message_level:int, stream_level:int, crash_behaviour:Callable, on_log_message_signal_emission_callback:Callable, values:Variant) -> void:
 	_push_to_queue(stream_name, message, message_level, stream_level, crash_behaviour, on_log_message_signal_emission_callback, values)
@@ -72,7 +78,7 @@ static func _push_to_queue(stream_name:String, message:String, message_level:int
 	
 	_log_mutex.lock()
 	#push_microbe.finish_sub_step("lock")
-	var entry:_LogEntry
+	var entry:LogStream.LogEntry
 	if _is_front_queue_full():
 		entry = _front_queue[_front_queue_size-1]
 		entry.stream_name = "Log"
@@ -101,6 +107,7 @@ static func _push_to_queue(stream_name:String, message:String, message_level:int
 		push_warning(message)
 	#push_microbe.finish_sub_step("if statements")
 	if message_level == LogStream.LogLevel.FATAL:
+		##This waits for the log thread to finish processing messages before exiting.
 		entry.crash_behaviour.call()
 	on_log_message_signal_emission_callback.call(message)
 	#push_microbe.finish_sub_step("signal emission")
@@ -130,7 +137,7 @@ static func _process_logs():
 		OS.delay_usec(max(CYCLE_BREAK_TIME*1000-delta, 0))
 
 ##Main internal logging method, please use the methods in LogStream instead of this from the outside, since this is NOT thread safe in any regard and not designed to be used.
-static func _internal_log(entry:_LogEntry):
+static func _internal_log(entry:LogStream.LogEntry):
 	var message = BB_CODE_REMOVER_REGEX.sub(entry.message, "", true)
 	var message_level:LogStream.LogLevel = entry.message_level
 	_reduce_stack(entry)
@@ -148,19 +155,21 @@ static func _internal_log(entry:_LogEntry):
 		Log.get_tree().root.print_tree_pretty()
 		print("")#Print empty line to mark new message
 
-static func _log_mode_editor(entry:_LogEntry):
-	#print("message level: " + str(entry.message_level))
-	#print(MESSAGE_FORMAT_STRINGS)
-	
-	print_rich(MESSAGE_FORMAT_STRINGS[entry.message_level].format(_get_format_data(entry)))
+static func _log_mode_editor(entry:LogStream.LogEntry):
+	var message_format_strings = MESSAGE_FORMAT_STRINGS
+	var message_level = entry.message_level
+	var message_format = message_format_strings[message_level]
+	var format_data = _get_format_data(entry)
+	var output = message_format.format(format_data)
+	print_rich(output)
 	var stack = entry.stack
 	var level = entry.message_level
 	if level == LogStream.LogLevel.WARN:
 		print(_create_stack_string(stack) + "\n")
 	if level > LogStream.LogLevel.WARN:
-		print(_create_stack_string(stack) + "\n")	
+		print(_create_stack_string(stack) + "\n")
 
-static func _log_mode_console(entry:_LogEntry):
+static func _log_mode_console(entry:LogStream.LogEntry):
 	##remove any BBCodes
 	var msg = BB_CODE_REMOVER_REGEX.sub(entry.message,"", true)
 	var level = entry.message_level
@@ -172,7 +181,7 @@ static func _log_mode_console(entry:_LogEntry):
 		push_error(msg)
 
 
-static func _get_format_data(entry:_LogEntry)->Dictionary:
+static func _get_format_data(entry:LogStream.LogEntry)->Dictionary:
 	var now = Time.get_datetime_dict_from_system(USE_UTC_TIME_FORMAT)
 	
 	var log_call = null
@@ -195,8 +204,9 @@ static func _get_format_data(entry:_LogEntry)->Dictionary:
 			"line": log_call["line"] if log_call else "",
 		}
 	if entry.values != null:
-		var reduced_values = BB_CODE_REMOVER_REGEX.sub(_stringify_values(entry.values), "", true)
-		print("values: (" + reduced_values + ")")
+		var values = _stringify_values(entry.values)
+		var reduced_values = BB_CODE_EXCLUDING_BRACKETS_REMOVER_REGEX.sub(values, "", true)
+		#print("values: (" + reduced_values + ")")
 		format_data["values"] = VALUE_PRIMER_STRING + reduced_values
 	else:
 		format_data["values"] = ""
@@ -232,7 +242,7 @@ static func _stringify_values(values)->String:
 			return JSON.stringify(values)
 
 ##Removes the top of the stack trace in order to remove the logger.
-static func _reduce_stack(entry:_LogEntry)->void:
+static func _reduce_stack(entry:LogStream.LogEntry)->void:
 	var kept_frames = 0
 	var stack = entry.stack
 	for i in range(stack.size()):
@@ -259,19 +269,5 @@ static func _cleanup():
 	_log_mutex.lock()
 	_is_quitting = true
 	_log_mutex.unlock()
-	_log_thread.wait_to_finish()
-
-#Class for lobbing around logging data between the main thread and the logging thread.
-class _LogEntry:
-	##The level of the message
-	var message_level:LogStream.LogLevel
-	##The 'raw' log message
-	var message:String
-	##The name of the stream
-	var stream_name:String
-	##The call stack of the log entry.
-	var stack:Array
-	##A crash_behaviour callback. This will be called upon a fatal error.
-	var crash_behaviour:Callable
-	## The values that may be attached to the log message.
-	var values
+	if _log_thread.is_started():
+		_log_thread.wait_to_finish()

@@ -2,7 +2,7 @@ extends Node
 
 
 ##Class for interacting with command line arguments and environement variables.
-class_name Config
+class_name LogConfig
 
 static func get_arguments() -> Dictionary:
 	var arguments = {}
@@ -94,3 +94,15 @@ static func get_custom_var(name,type,default=null):
 		TYPE_VECTOR3:
 			pass
 	return default
+
+static func get_external_log_level(log_name: String, default_level: int) -> int:
+	var cmd_line_level = get_var("log-level", "default").to_upper()
+	var project_settings_level = ProjectSettings.get_setting(_LogInternalPrinter._settings.STREAM_LEVEL_SETTING_LOCATION + log_name)
+	if cmd_line_level.to_lower() != "default":
+		if LogStream.LogLevel.has(cmd_line_level):
+			return LogStream.LogLevel.find_key(cmd_line_level)
+		else:
+			Log.warn("The variable log-level is set to an illegal type, defaulting to info")
+			return default_level
+	else:
+		return project_settings_level

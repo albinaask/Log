@@ -17,7 +17,7 @@ Please also disclose whether there are any API changes that may effect users of 
   - This should produce several error messages, among one that halts the test execution and brings up the editor debugger.
   - press ![bild](https://github.com/albinaask/Log/assets/11806563/4e4b3d51-793f-496e-8193-c96b5884f1cc) once.
   - Now this message ![bild](https://github.com/albinaask/Log/assets/11806563/c3102b55-21b3-438e-a420-56971ad98d39) should show in the engine log.
-- [ ] I have correctly bumped the version in the config.cfg according to the following:
+- [ ] I have correctly bumped the version in the plugin.cfg according to the following:
   - Has form x.y.z
   - x is bumped if API breaking changes is made, these are merged restrictively.
   - y is bumped if API is added upon or modified in a way that is backwards compatible.

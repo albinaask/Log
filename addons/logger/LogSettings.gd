@@ -18,27 +18,27 @@
 ##  "minute" Minute -||-, int 0-59
 ##  "second" Second -||-, int 0-59. Note that this may differ on a second or two since the time is get in the logger thread, which may not run for a couple of milliseconds.
 ##BBCode friendly, aka any BBCode may be inserted here.
-const DEBUG_MESSAGE_FORMAT_DEFAULT_VALUE = "[color=dark_gray]{log_name}/{level} ({script}:{line}) [lb]{hour}:{minute}:{second}[rb] {message}[/color]{values}"
+const DEBUG_MESSAGE_FORMAT_DEFAULT_VALUE = "[color=dark_gray]{log_name}/{level} ({script}:{line}) [lb]{hour}:{minute}:{second}[rb] {message}{values}[/color]"
 ##The path within the ProjectSettings where this setting is stored.
 const DEBUG_MESSAGE_FORMAT_KEY = "addons/Log/debug_message_format"
 
 ##Same as 'DEBUG_LOG_MESSAGE_FORMAT_KEY'.
-const INFO_MESSAGE_FORMAT_DEFAULT_VALUE = "[color=white]{log_name}/{level} ({script}:{line}) [lb]{hour}:{minute}:{second}[rb] {message}[/color]{values}"
+const INFO_MESSAGE_FORMAT_DEFAULT_VALUE = "[color=white]{log_name}/{level} ({script}:{line}) [lb]{hour}:{minute}:{second}[rb] {message}{values}[/color]"
 ##The path within the ProjectSettings where this setting is stored.
 const INFO_MESSAGE_FORMAT_KEY = "addons/Log/info_message_format"
 
 ##Same as 'DEBUG_LOG_MESSAGE_FORMAT_KEY'.
-const WARNING_MESSAGE_FORMAT_DEFAULT_VALUE = "[color=gold]{log_name}/{level} ({script}:{line}) [lb]{hour}:{minute}:{second}[rb] {message}[/color]{values}"
+const WARNING_MESSAGE_FORMAT_DEFAULT_VALUE = "[color=gold]{log_name}/{level} ({script}:{line}) [lb]{hour}:{minute}:{second}[rb] {message}{values}[/color]"
 ##The path within the ProjectSettings where this setting is stored.
 const WARNING_MESSAGE_FORMAT_KEY = "addons/Log/warning_message_format"
 
 ##Same as 'DEBUG_LOG_MESSAGE_FORMAT_KEY'
-const ERROR_MESSAGE_FORMAT_DEFAULT_VALUE = "[color=red]{log_name}/{level} ({script}:{line}) [lb]{hour}:{minute}:{second}[rb] {message}[/color]{values}"
+const ERROR_MESSAGE_FORMAT_DEFAULT_VALUE = "[color=red]{log_name}/{level} ({script}:{line}) [lb]{hour}:{minute}:{second}[rb] {message}{values}[/color]"
 ##The path within the ProjectSettings where this setting is stored.
 const ERROR_MESSAGE_FORMAT_KEY = "addons/Log/error_message_format"
 
 ##Same as 'DEBUG_LOG_MESSAGE_FORMAT_KEY'
-const FATAL_MESSAGE_FORMAT_DEFAULT_VALUE = "[color=red][u][b]{log_name}/{level} ({script}:{line}) [lb]{hour}:{minute}:{second}[rb] {message}[/b][/u][/color]{values}"
+const FATAL_MESSAGE_FORMAT_DEFAULT_VALUE = "[color=red][u][b]{log_name}/{level} ({script}:{line}) [lb]{hour}:{minute}:{second}[rb] {message}[/b][/u]{values}[/color]"
 ##The path within the ProjectSettings where this setting is stored.
 const FATAL_MESSAGE_FORMAT_KEY = "addons/Log/fatal_message_format"
 
@@ -66,7 +66,6 @@ const LOG_QUEUE_SIZE_DEFAULT_VALUE = 128
 ##Controls the maximum time of thread sleeping between printing message batches, in ms.
 const MIN_PRINTING_CYCLE_TIME_KEY = "addons/Log/min_printing_cycle_time"
 const MIN_PRINTING_CYCLE_TIME_DEFAULT_VALUE = 5
-
 
 ##Controls where all the log streams are found within the project settings.
 const STREAM_LEVEL_SETTING_LOCATION = "addons/Log/streams/"

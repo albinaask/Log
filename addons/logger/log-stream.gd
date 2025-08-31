@@ -22,6 +22,14 @@ signal log_message(level:LogLevel,message:String)
 ##Represents the minimum level of messages that will be logged.
 var current_log_level:LogLevel = LogLevel.INFO:set= _set_level
 
+
+## Constructor for the LogStream.
+##
+## The parameters are:
+##
+## - `log_name`: The name of the logger. This is used to identify the logger in the log output.
+## - `min_log_level`: The minimum level of messages that will be logged. Defaults to -1, this causes the stream to use either the one found in the project settings, environment variable or the command line.
+## - `crash_behavior`: A Callable that is called when a fatal error is encountered. Defaults to default_crash_behavior. Takes no arguments.
 func _init(log_name:String, min_log_level:LogLevel=-1, crash_behavior:Callable = default_crash_behavior):
 	_log_name = log_name
 	_LogInternalPrinter._settings._ensure_setting_exists(_LogInternalPrinter._settings.STREAM_LEVEL_SETTING_LOCATION+_log_name, LogLevel.INFO,
@@ -43,7 +51,7 @@ func debug(message:String,values:Variant=null):
 
 ##Shorthand for debug
 func dbg(message:String,values:Variant=null):
-	_LogInternalPrinter._push_to_queue(_log_name, message, LogLevel.DEBUG, current_log_level, _crash_behavior, log_message.emit, values)
+	debug(message,values)
 
 ##prints a message to the log at the info level.
 func info(message:String,values:Variant=null):
@@ -59,7 +67,7 @@ func error(message:String,values:Variant=null):
 
 ##Shorthand for error
 func err(message:String,values:Variant=null):
-	_LogInternalPrinter._push_to_queue(_log_name, message, LogLevel.ERROR, current_log_level, _crash_behavior, log_message.emit, values)
+	error(message,values)
 
 ##Prints a message to the log at the fatal level, exits the application 
 ##since there has been a fatal error.
@@ -89,22 +97,9 @@ func err_cond_not_equal(arg1, arg2, message:String, fatal:=true, other_values_to
 
 ##Internal method.
 func _set_level(level:LogLevel):
-	level = _get_external_log_level() if level == -1 else level
+	#level = LogConfig.get_external_log_level(_log_name, LogLevel.INFO) if level == -1 else level
 	info("setting log level to " + LogLevel.keys()[level])
 	current_log_level = level
-
-##Internal method.
-func _get_external_log_level()->LogLevel:
-	var cmd_line_level = Config.get_var("log-level","default").to_upper()
-	var project_settings_level = ProjectSettings.get_setting(_LogInternalPrinter._settings.STREAM_LEVEL_SETTING_LOCATION+_log_name)
-	if cmd_line_level.to_lower() != "default":
-		if LogLevel.keys().has(cmd_line_level.to_upper()):
-			return LogLevel[cmd_line_level]
-		else:
-			warn("The variable log-level is set to an illegal type, defaulting to info")
-			return LogLevel.INFO
-	else:
-		return project_settings_level
 
 
 #make sure settings are synced without pulling them all the time. Not that this can take a tick or so.
@@ -117,7 +112,6 @@ static func sync_project_settings()->void:
 	_LogInternalPrinter.VALUE_PRIMER_STRING = settings._ensure_setting_exists(settings.VALUE_PRIMER_STRING_KEY, settings.VALUE_PRIMER_STRING_DEFAULT_VALUE)
 	#See _LogInternalPrinter.MESSAGE_FORMAT_STRINGS for details.
 	_LogInternalPrinter.MESSAGE_FORMAT_STRINGS = [
-		"",
 		settings._ensure_setting_exists(settings.DEBUG_MESSAGE_FORMAT_KEY, settings.DEBUG_MESSAGE_FORMAT_DEFAULT_VALUE),
 		settings._ensure_setting_exists(settings.INFO_MESSAGE_FORMAT_KEY, settings.INFO_MESSAGE_FORMAT_DEFAULT_VALUE),
 		settings._ensure_setting_exists(settings.WARNING_MESSAGE_FORMAT_KEY, settings.WARNING_MESSAGE_FORMAT_DEFAULT_VALUE),
@@ -126,8 +120,9 @@ static func sync_project_settings()->void:
 	]
 
 ##Controls the behavior when a fatal error has been logged. 
-##Edit to customize the behavior.
-static func default_crash_behavior():
+##Edit to customize the default behavior.
+static func default_crash_behavior()->void:
+	#Joins the logging thread(aka waits for it to log all messages that are in the queue) onto the main thread, and cleans up the logging thread.
 	_LogInternalPrinter._cleanup()
 	print("Crashing due to Fatal error.")
 	#Restart the process to the main scene. (Uncomment if wanted), 
@@ -140,3 +135,19 @@ static func default_crash_behavior():
 	#Warning regarding the use of OS.crash() in the docs can safely be regarded in this case.
 	OS.crash("Crash since falal error ocurred")
 	#get_tree().quit(-1)
+
+
+#Class for lobbing around logging data between the main thread and the logging thread.
+class LogEntry:
+	##The level of the message
+	var message_level:LogStream.LogLevel
+	##The 'raw' log message
+	var message:String
+	##The name of the stream
+	var stream_name:String
+	##The call stack of the log entry.
+	var stack:Array
+	##A crash_behaviour callback. This will be called upon a fatal error.
+	var crash_behaviour:Callable
+	## The values that may be attached to the log message.
+	var values
