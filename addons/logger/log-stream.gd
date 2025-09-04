@@ -46,24 +46,24 @@ func _ready() -> void:
 		get_tree().root.tree_exiting.connect(_LogInternalPrinter._cleanup)
 
 ##prints a message to the log at the debug level.
-func debug(message:String,values:Variant=null):
-	_LogInternalPrinter._push_to_queue(_log_name, message, LogLevel.DEBUG, current_log_level, _crash_behavior, log_message.emit, values)
+func debug(message:Variant,values:Variant=null):
+	_LogInternalPrinter._push_to_queue(_log_name, str(message), LogLevel.DEBUG, current_log_level, _crash_behavior, log_message.emit, values)
 
 ##Shorthand for debug
-func dbg(message:String,values:Variant=null):
+func dbg(message:Variant,values:Variant=null):
 	debug(message,values)
 
 ##prints a message to the log at the info level.
-func info(message:String,values:Variant=null):
-	_LogInternalPrinter._push_to_queue(_log_name, message, LogLevel.INFO, current_log_level, _crash_behavior, log_message.emit, values)
+func info(message:Variant,values:Variant=null):
+	_LogInternalPrinter._push_to_queue(_log_name, str(message), LogLevel.INFO, current_log_level, _crash_behavior, log_message.emit, values)
 
 ##prints a message to the log at the warning level.
-func warn(message:String,values:Variant=null):
-	_LogInternalPrinter._push_to_queue(_log_name, message, LogLevel.WARN, current_log_level, _crash_behavior, log_message.emit, values)
+func warn(message:Variant,values:Variant=null):
+	_LogInternalPrinter._push_to_queue(_log_name, str(message), LogLevel.WARN, current_log_level, _crash_behavior, log_message.emit, values)
 
 ##Prints a message to the log at the error level.
-func error(message:String,values:Variant=null):
-	_LogInternalPrinter._push_to_queue(_log_name, message, LogLevel.ERROR, current_log_level, _crash_behavior, log_message.emit, values)
+func error(message:Variant,values:Variant=null):
+	_LogInternalPrinter._push_to_queue(_log_name, str(message), LogLevel.ERROR, current_log_level, _crash_behavior, log_message.emit, values)
 
 ##Shorthand for error
 func err(message:String,values:Variant=null):
@@ -71,29 +71,29 @@ func err(message:String,values:Variant=null):
 
 ##Prints a message to the log at the fatal level, exits the application 
 ##since there has been a fatal error.
-func fatal(message:String,values:Variant=null):
-	_LogInternalPrinter._push_to_queue(_log_name, message, LogLevel.FATAL, current_log_level, _crash_behavior, log_message.emit, values)
+func fatal(message:Variant,values:Variant=null):
+	_LogInternalPrinter._push_to_queue(_log_name, str(message), LogLevel.FATAL, current_log_level, _crash_behavior, log_message.emit, values)
 
 ##Throws an error if err_code is not of value "OK" and appends the error code string.
-func err_cond_not_ok(err_code:Error, message:String, fatal:=true, other_values_to_be_printed=null):
+func err_cond_not_ok(err_code:Error, message_on_err:String, fatal:=true, other_values_to_be_printed=null):
 	if err_code != OK:
-		_LogInternalPrinter._push_to_queue(_log_name, message + "" if message.ends_with(".") else "." + " Error string: " + error_string(err_code), LogLevel.FATAL if fatal else LogLevel.ERROR, current_log_level, _crash_behavior, log_message.emit, other_values_to_be_printed)
+		_LogInternalPrinter._push_to_queue(_log_name, message_on_err + "" if message_on_err.ends_with(".") else "." + " Error string: " + error_string(err_code), LogLevel.FATAL if fatal else LogLevel.ERROR, current_log_level, _crash_behavior, log_message.emit, other_values_to_be_printed)
 
 ##Throws an error if the "statement" passed is false. Handy for making code "free" from if statements.
-func err_cond_false(statement:bool, message:String, fatal:=true, other_values_to_be_printed={}):
+func err_cond_false(statement:bool, message_on_err:String, fatal:=true, other_values_to_be_printed={}):
 	if !statement:
-		_LogInternalPrinter._push_to_queue(_log_name, message, LogLevel.FATAL if fatal else LogLevel.ERROR, current_log_level, _crash_behavior, log_message.emit, other_values_to_be_printed)
+		_LogInternalPrinter._push_to_queue(_log_name, message_on_err, LogLevel.FATAL if fatal else LogLevel.ERROR, current_log_level, _crash_behavior, log_message.emit, other_values_to_be_printed)
 
 ##Throws an error if argument == null
-func err_cond_null(arg, message:String, fatal:=true, other_values_to_be_printed=null):
+func err_cond_null(arg, message_on_err:String, fatal:=true, other_values_to_be_printed=null):
 	if arg == null:
-			_LogInternalPrinter._push_to_queue(_log_name, message, LogLevel.FATAL if fatal else LogLevel.ERROR, current_log_level, _crash_behavior, log_message.emit, other_values_to_be_printed)
+			_LogInternalPrinter._push_to_queue(_log_name, message_on_err, LogLevel.FATAL if fatal else LogLevel.ERROR, current_log_level, _crash_behavior, log_message.emit, other_values_to_be_printed)
 
 ##Throws an error if the arg1 isn't equal to arg2. Handy for making code "free" from if statements.
-func err_cond_not_equal(arg1, arg2, message:String, fatal:=true, other_values_to_be_printed=null):
+func err_cond_not_equal(arg1, arg2, message_on_err:String, fatal:=true, other_values_to_be_printed=null):
 	#The type 'Color' is weird in godot, so therefore this edgecase...
 	if (arg1 is Color && arg2 is Color && !arg1.is_equal_approx(arg2)) || arg1 != arg2:
-		_LogInternalPrinter._push_to_queue(_log_name, str(arg1) + " != " + str(arg2) + ", not allowed. " + message, LogLevel.FATAL if fatal else LogLevel.ERROR, current_log_level, _crash_behavior, log_message.emit, other_values_to_be_printed)	
+		_LogInternalPrinter._push_to_queue(_log_name, str(arg1) + " != " + str(arg2) + ", not allowed. " + message_on_err, LogLevel.FATAL if fatal else LogLevel.ERROR, current_log_level, _crash_behavior, log_message.emit, other_values_to_be_printed)	
 
 ##Internal method.
 func _set_level(level:LogLevel):
