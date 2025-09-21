@@ -7,7 +7,7 @@ class_name LogConfig
 static func get_arguments() -> Dictionary:
 	var arguments = {}
 	var key = ""
-	
+
 	for argument in OS.get_cmdline_args():
 			var k = _parse_argument_key(argument)
 			if k != "":
@@ -15,10 +15,12 @@ static func get_arguments() -> Dictionary:
 				arguments[k] = ""
 			elif key != "":
 				arguments[key] = argument
+				# TODO: this is a no-op
 				key == ""
 			if argument.contains("="):
 				var key_value = argument.split("=")
 				arguments[key] = key_value[1]
+				# TODO: this is a no-op
 				key == ""
 	return arguments
 
@@ -33,7 +35,7 @@ static func _parse_argument_key(argument:String) -> String:
 
 static func get_steam_flag_name(name:String,prefix:String="") -> String:
 	return (prefix + name).to_lower().replace("-","_")
-	
+
 static func get_flag_name(name:String,prefix:String="") -> String:
 	return (prefix + name).to_lower().replace("_","-")
 
@@ -45,7 +47,7 @@ static func get_var(name,default=""):
 	var flag_name = get_flag_name(name)
 	var config_value = OS.get_environment(env_var_name)
 	var steam_name = get_steam_flag_name(name)
-	
+
 	var args = get_arguments()
 	if args.has(flag_name):
 		return args[flag_name]
@@ -57,7 +59,7 @@ static func get_var(name,default=""):
 
 static func get_int(name,default=0) -> int:
 	return int(get_var(name,default))
-	
+
 static func get_bool(name,default=false,prefix:String="") -> bool:
 	var v = get_var(name,default).to_lower()
 	match v:
@@ -102,7 +104,10 @@ static func get_external_log_level(log_name: String, default_level: int) -> int:
 		if LogStream.LogLevel.has(cmd_line_level):
 			return LogStream.LogLevel.find_key(cmd_line_level)
 		else:
-			Log.warn("The variable log-level is set to an illegal type, defaulting to info")
+			_warn_via_log("The variable log-level is set to an illegal type, defaulting to info")
 			return default_level
 	else:
 		return project_settings_level
+
+static func _warn_via_log(message: String) -> void:
+	push_warning(message)

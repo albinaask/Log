@@ -5,6 +5,9 @@ extends Node
 
 class_name LogStream
 
+# Preload once so log level resolution works even if LogConfig is not yet in the cache; mirrors the `_settings` naming style.
+const _log_config := preload("res://addons/logger/LogConfig.gd")
+
 enum LogLevel {
 	DEBUG = 0,
 	INFO = 1,
@@ -69,7 +72,7 @@ func error(message:Variant,values:Variant=null):
 func err(message:String,values:Variant=null):
 	error(message,values)
 
-##Prints a message to the log at the fatal level, exits the application 
+##Prints a message to the log at the fatal level, exits the application
 ##since there has been a fatal error.
 func fatal(message:Variant,values:Variant=null):
 	_LogInternalPrinter._push_to_queue(_log_name, str(message), LogLevel.FATAL, current_log_level, _crash_behavior, log_message.emit, values)
@@ -93,13 +96,19 @@ func err_cond_null(arg, message_on_err:String, fatal:=true, other_values_to_be_p
 func err_cond_not_equal(arg1, arg2, message_on_err:String, fatal:=true, other_values_to_be_printed=null):
 	#The type 'Color' is weird in godot, so therefore this edgecase...
 	if (arg1 is Color && arg2 is Color && !arg1.is_equal_approx(arg2)) || arg1 != arg2:
-		_LogInternalPrinter._push_to_queue(_log_name, str(arg1) + " != " + str(arg2) + ", not allowed. " + message_on_err, LogLevel.FATAL if fatal else LogLevel.ERROR, current_log_level, _crash_behavior, log_message.emit, other_values_to_be_printed)	
+		_LogInternalPrinter._push_to_queue(_log_name, str(arg1) + " != " + str(arg2) + ", not allowed. " + message_on_err, LogLevel.FATAL if fatal else LogLevel.ERROR, current_log_level, _crash_behavior, log_message.emit, other_values_to_be_printed)
 
 ##Internal method.
 func _set_level(level:LogLevel):
-	#level = LogConfig.get_external_log_level(_log_name, LogLevel.INFO) if level == -1 else level
-	info("setting log level to " + LogLevel.keys()[level])
-	current_log_level = level
+	var resolved_level := level
+	if level == -1:
+		# -1 is the "inherit from settings" sentinel; resolve it before logging.
+		resolved_level = _log_config.get_external_log_level(_log_name, LogLevel.INFO)
+	if resolved_level < 0 or resolved_level >= LogLevel.keys().size():
+		# Guard against unexpected values so the log never prints bogus levels.
+		resolved_level = LogLevel.INFO
+	info("setting log level to " + LogLevel.keys()[resolved_level])
+	current_log_level = resolved_level
 
 
 #make sure settings are synced without pulling them all the time. Not that this can take a tick or so.
@@ -119,19 +128,19 @@ static func sync_project_settings()->void:
 		settings._ensure_setting_exists(settings.FATAL_MESSAGE_FORMAT_KEY, settings.FATAL_MESSAGE_FORMAT_DEFAULT_VALUE)
 	]
 
-##Controls the behavior when a fatal error has been logged. 
+##Controls the behavior when a fatal error has been logged.
 ##Edit to customize the default behavior.
 static func default_crash_behavior()->void:
 	#Joins the logging thread(aka waits for it to log all messages that are in the queue) onto the main thread, and cleans up the logging thread.
 	_LogInternalPrinter._cleanup()
 	print("Crashing due to Fatal error.")
-	#Restart the process to the main scene. (Uncomment if wanted), 
-	#note that we don't want to restart if we crash on init, then we get stuck in an infinite crash-loop, which isn't fun for anyone. 
+	#Restart the process to the main scene. (Uncomment if wanted),
+	#note that we don't want to restart if we crash on init, then we get stuck in an infinite crash-loop, which isn't fun for anyone.
 	#if get_tree().get_frame()>0:
 	#	var _ret = OS.create_process(OS.get_executable_path(), OS.get_cmdline_args())
-	
-	#Choose crash mechanism. Difference is that get_tree().quit() quits at the end of the frame, 
-	#enabling multiple fatal errors to be cast, printing multiple stack traces etc. 
+
+	#Choose crash mechanism. Difference is that get_tree().quit() quits at the end of the frame,
+	#enabling multiple fatal errors to be cast, printing multiple stack traces etc.
 	#Warning regarding the use of OS.crash() in the docs can safely be regarded in this case.
 	OS.crash("Crash since falal error ocurred")
 	#get_tree().quit(-1)
