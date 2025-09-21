@@ -1,9 +1,9 @@
 @tool
 extends RefCounted
 
-##Intrenal singleton that handles all the printing of logs.
-##If modifications to the logging behaviour is required, this is the place to do it.
-##Generally, an entry is processed per message, and it is processed with _internal_log.
+##Intrenal singleton that handles all the printing of logs. 
+##If modifications to the logging behaviour is required, this is the place to do it. 
+##Generally, an entry is processed per message, and it is processed with _internal_log. 
 ##Using this and the methods that this calles should be a good start for editing.
 ##They are called by a separate thread and thread safe between eachother. Storing data between the threads is done through the LogStream.LogEntry class.
 class_name _LogInternalPrinter
@@ -58,10 +58,10 @@ static func _static_init() -> void:
 		_settings._ensure_setting_exists(_settings.ERROR_MESSAGE_FORMAT_KEY, _settings.ERROR_MESSAGE_FORMAT_DEFAULT_VALUE),
 		_settings._ensure_setting_exists(_settings.FATAL_MESSAGE_FORMAT_KEY, _settings.FATAL_MESSAGE_FORMAT_DEFAULT_VALUE)
 	]
-
+	
 	var queue_size = _settings._ensure_setting_exists(_settings.LOG_QUEUE_SIZE_KEY, _settings.LOG_QUEUE_SIZE_DEFAULT_VALUE)
 	queue_size = max(queue_size, 1)#Make sure queue size is at least 1.
-
+	
 	BB_CODE_REMOVER_REGEX.compile("\\[(lb|rb)\\]|\\[.*?\\]")
 	BB_CODE_EXCLUDING_BRACKETS_REMOVER_REGEX.compile("\\[(?!(?:lb|rb)\\])[a-zA-Z0-9=_\\/]*+\\]")
 	if !ProjectSettings.settings_changed.is_connected(LogStream.sync_project_settings):
@@ -72,7 +72,7 @@ static func _static_init() -> void:
 		# without this the worker keeps running with freed bytecode and crashes on save.
 		if _script_server and !_script_server.script_changed.is_connected(_on_script_server_script_changed):
 			_script_server.script_changed.connect(_on_script_server_script_changed)
-
+	
 	# Rebuild the queues; old LogEntry instances may still reference freed script data.
 	_front_queue = [] as Array[LogStream.LogEntry]
 	_back_queue = [] as Array[LogStream.LogEntry]
@@ -101,7 +101,7 @@ static func _push_to_queue(stream_name:String, message:String, message_level:int
 	if message_level < stream_level:
 	#	push_microbe.finish()
 		return
-
+	
 	# Editor builds skip the worker thread entirely and log on the main thread here.
 	# Godot reloads editor scripts aggressively for previews/completion; keeping the
 	# background thread alive across those reloads would leave it running against
@@ -185,7 +185,7 @@ static func _process_logs():
 		for i in range(_back_queue_size):
 			_internal_log(_back_queue[i])
 		var delta = Time.get_ticks_usec() - start
-		#Sleep for a while, depending on the time it took to process the messages,
+		#Sleep for a while, depending on the time it took to process the messages, 
 		OS.delay_usec(max(CYCLE_BREAK_TIME*1000-delta, 0))
 
 ##Main internal logging method, please use the methods in LogStream instead of this from the outside, since this is NOT thread safe in any regard and not designed to be used.
@@ -193,9 +193,9 @@ static func _internal_log(entry:LogStream.LogEntry):
 	var message = BB_CODE_REMOVER_REGEX.sub(entry.message, "", true)
 	var message_level:LogStream.LogLevel = entry.message_level
 	_reduce_stack(entry)
-
+	
 	var value_string = _stringify_values(entry.values)
-
+	 
 	if entry.stack.is_empty():#Aka is connected to debug server -> print to the editor console in addition to pushing the warning.
 		_log_mode_console(entry)
 	else:
@@ -236,7 +236,7 @@ static func _log_mode_console(entry:LogStream.LogEntry):
 
 static func _get_format_data(entry:LogStream.LogEntry)->Dictionary:
 	var now = Time.get_datetime_dict_from_system(USE_UTC_TIME_FORMAT)
-
+	
 	var log_call = null
 	var script = ""
 	var script_class_name = ""
@@ -246,13 +246,13 @@ static func _get_format_data(entry:LogStream.LogEntry)->Dictionary:
 		script = source.split("/")[-1]
 		var result = GLOBAL_PATH_LIST.filter(func(entry):return entry["path"] == source)
 		script_class_name = script if result.is_empty() else result[0]["class"]
-
+	
 	var format_data := {
 			"log_name":entry.stream_name,
 			"message":entry.message,
 			"level":LogStream.LogLevel.keys()[entry.message_level],
 			"script": script,
-			"class": script_class_name,
+			"class": script_class_name, 
 			"function": log_call["function"] if log_call else "",
 			"line": log_call["line"] if log_call else "",
 		}
@@ -269,7 +269,7 @@ static func _get_format_data(entry:LogStream.LogEntry)->Dictionary:
 	format_data["day"] = "%02d"%now["day"]
 	format_data["month"] = "%02d"%now["month"]
 	format_data["year"] = "%04d"%now["year"]
-
+	
 	return format_data
 
 static func _stringify_values(values)->String:
