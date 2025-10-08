@@ -204,7 +204,7 @@ static func _internal_log(entry:LogStream.LogEntry):
 	if message_level > LogStream.LogLevel.WARN && PRINT_TREE_ON_ERROR:
 		if !_single_threaded_mode:
 			# When the worker thread is active we're off the main thread; bounce back before touching the tree.
-			Callable(_LogInternalPrinter, "_deferred_print_tree").call_deferred()
+			_print_tree_now.call_deferred()
 		else:
 			_print_tree_now()
 
@@ -340,11 +340,8 @@ static func _on_script_server_script_changed(script:Script) -> void:
 	if script.resource_path == LOGGER_SCRIPT_PATH:
 		_cleanup()
 
-static func _deferred_print_tree() -> void:
-	# Triggered via call_deferred(); safely re-enters the main thread before printing.
-	_print_tree_now()
-
 static func _print_tree_now() -> void:
+	# May be reached via call_deferred() to ensure we run on the main thread before touching the tree.
 	var main_loop = Engine.get_main_loop()
 	if main_loop is SceneTree:
 		var tree: SceneTree = main_loop
