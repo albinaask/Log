@@ -4,7 +4,7 @@
 script/source = "extends Node
 
 var _break_on_error_current_val:bool
-var log_settings = preload(\"res://addons/logger/settings.gd\")
+var log_settings = preload(\"res://addons/logger/LogSettings.gd\")
 #Run scene to run tests.
 func _ready():
 	#save current value to reset it later for when we are done with it!

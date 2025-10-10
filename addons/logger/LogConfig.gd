@@ -102,7 +102,10 @@ static func get_external_log_level(log_name: String, default_level: int) -> int:
 		if LogStream.LogLevel.has(cmd_line_level):
 			return LogStream.LogLevel.find_key(cmd_line_level)
 		else:
-			Log.warn("The variable log-level is set to an illegal type, defaulting to info")
+			_warn_via_log("The variable log-level is set to an illegal type, defaulting to info")
 			return default_level
 	else:
 		return project_settings_level
+
+static func _warn_via_log(message: String) -> void:
+	push_warning(message)

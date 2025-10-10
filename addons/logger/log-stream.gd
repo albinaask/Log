@@ -5,6 +5,9 @@ extends Node
 
 class_name LogStream
 
+# Preload once so log level resolution works even if LogConfig is not yet in the cache; mirrors the `_settings` naming style.
+const _log_config := preload("res://addons/logger/LogConfig.gd")
+
 enum LogLevel {
 	DEBUG = 0,
 	INFO = 1,
@@ -118,9 +121,15 @@ func err_cond_not_equal(arg1, arg2, message_on_err:String, fatal:=true, other_va
 
 ##Internal method.
 func _set_level(level:LogLevel):
-	#level = LogConfig.get_external_log_level(_log_name, LogLevel.INFO) if level == -1 else level
-	info("setting log level to " + LogLevel.keys()[level])
-	current_log_level = level
+	var resolved_level := level
+	if level == -1:
+		# -1 is the "inherit from settings" sentinel; resolve it before logging.
+		resolved_level = _log_config.get_external_log_level(_log_name, LogLevel.INFO)
+	if resolved_level < 0 or resolved_level >= LogLevel.keys().size():
+		# Guard against unexpected values so the log never prints bogus levels.
+		resolved_level = LogLevel.INFO
+	info("setting log level to " + LogLevel.keys()[resolved_level])
+	current_log_level = resolved_level
 
 
 #make sure settings are synced without pulling them all the time. Not that this can take a tick or so.

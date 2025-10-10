@@ -19,6 +19,12 @@ static var _log_mutex = Mutex.new()
 static var _log_thread = Thread.new()
 ##Flag for marking when the log thread should stop looping.
 static var _is_quitting = false
+static var _is_thread_started = false
+static var _script_server: Object
+## Tracks whether logging stays on the main thread (true inside the editor).
+static var _single_threaded_mode = true
+# Used to double-check ScriptServer notifications target this script.
+const LOGGER_SCRIPT_PATH := "res://addons/logger/_LogInternalPrinter.gd"
 ##Used for benchmarking the time it takes to log a message on the main thread. Microbe is WIP, but see github.com/albinaask/Microbe for more info.
 #static var push_microbe = Microbe.new("push to queue")
 
@@ -38,6 +44,13 @@ static var MESSAGE_FORMAT_STRINGS:Array[String]
 
 ##Every method in this class is static, therefore a static constructor is used.
 static func _static_init() -> void:
+	# The Godot editor's hot-reload can call _static_init multiple times; shut down any old worker first.
+	if _is_thread_started:
+		_cleanup()
+	_is_quitting = false
+	# Runtime builds keep the background worker; editor builds force single-threaded logging.
+	_single_threaded_mode = Engine.is_editor_hint()
+
 	MESSAGE_FORMAT_STRINGS  = [
 		_settings._ensure_setting_exists(_settings.DEBUG_MESSAGE_FORMAT_KEY, _settings.DEBUG_MESSAGE_FORMAT_DEFAULT_VALUE),
 		_settings._ensure_setting_exists(_settings.INFO_MESSAGE_FORMAT_KEY, _settings.INFO_MESSAGE_FORMAT_DEFAULT_VALUE),
@@ -53,16 +66,29 @@ static func _static_init() -> void:
 	BB_CODE_EXCLUDING_BRACKETS_REMOVER_REGEX.compile("\\[(?!(?:lb|rb)\\])[a-zA-Z0-9=_\\/]*+\\]")
 	if !ProjectSettings.settings_changed.is_connected(LogStream.sync_project_settings):
 		ProjectSettings.settings_changed.connect(LogStream.sync_project_settings)
-	if _log_thread.start(_process_logs, Thread.PRIORITY_LOW) != OK:
-		#TODO: update this to call _internal_log.
-		#TODO: Make Log able to log from same thread...
-		printerr("Log error: Couldn't create Log thread. This should never happen, please contact dev. No messages will be printed")
+	if Engine.is_editor_hint() and Engine.has_singleton("ScriptServer"):
+		_script_server = Engine.get_singleton("ScriptServer")
+		# Listen for editor reloads so we can join the worker before bytecode is swapped out;
+		# without this the worker keeps running with freed bytecode and crashes on save.
+		if _script_server and !_script_server.script_changed.is_connected(_on_script_server_script_changed):
+			_script_server.script_changed.connect(_on_script_server_script_changed)
 	
+	# Rebuild the queues; old LogEntry instances may still reference freed script data.
+	_front_queue = [] as Array[LogStream.LogEntry]
+	_back_queue = [] as Array[LogStream.LogEntry]
+	_front_queue_size = 0
 	_front_queue.resize(queue_size)
 	_back_queue.resize(queue_size)
 	for i in range(queue_size):
 		_front_queue[i] = LogStream.LogEntry.new()
 		_back_queue[i] = LogStream.LogEntry.new()
+
+	if !_single_threaded_mode:
+		if _log_thread.start(_process_logs, Thread.PRIORITY_LOW) != OK:
+			printerr("Log error: Couldn't create Log thread. This should never happen, please contact dev. No messages will be printed")
+		else:
+			# Track that we have a live worker so reload can shut it down first.
+			_is_thread_started = true
 
 func _ns_push_to_queue(stream_name:String, message:String, message_level:int, stream_level:int, crash_behaviour:Callable, on_log_message_signal_emission_callback:Callable, values:Variant) -> void:
 	_push_to_queue(stream_name, message, message_level, stream_level, crash_behaviour, on_log_message_signal_emission_callback, values)
@@ -76,6 +102,32 @@ static func _push_to_queue(stream_name:String, message:String, message_level:int
 	#	push_microbe.finish()
 		return
 	
+	# Editor builds skip the worker thread entirely and log on the main thread here.
+	# Godot reloads editor scripts aggressively for previews/completion; keeping the
+	# background thread alive across those reloads would leave it running against
+	# freed bytecode and crash (see https://github.com/albinaask/Log/issues/22). This
+	# single-threaded path keeps the editor stable while runtime exports still use
+	# the async worker.
+	if _single_threaded_mode:
+		var entry = LogStream.LogEntry.new()
+		entry.stream_name = stream_name
+		entry.message = message
+		entry.message_level = message_level
+		entry.crash_behaviour = crash_behaviour
+		entry.values = values
+		entry.stack = get_stack()
+		if message_level >= LogStream.LogLevel.ERROR:
+			push_error(message)
+			if BREAK_ON_ERROR:
+				breakpoint
+		elif message_level == LogStream.LogLevel.WARN:
+			push_warning(message)
+		_internal_log(entry)
+		if message_level == LogStream.LogLevel.FATAL:
+			entry.crash_behaviour.call()
+		on_log_message_signal_emission_callback.call(message)
+		return
+
 	_log_mutex.lock()
 	#push_microbe.finish_sub_step("lock")
 	var entry:LogStream.LogEntry
@@ -149,11 +201,12 @@ static func _internal_log(entry:LogStream.LogEntry):
 	else:
 		_log_mode_editor(entry)
 	##AKA, level is error or fatal, the main tree is accessible and we want to print it.
-	if message_level > LogStream.LogLevel.WARN && Log.is_inside_tree() && PRINT_TREE_ON_ERROR:
-		#We want to access the main scene tree since this may be a custom logger that isn't in the main tree.
-		print("Main tree: ")
-		Log.get_tree().root.print_tree_pretty()
-		print("")#Print empty line to mark new message
+	if message_level > LogStream.LogLevel.WARN && PRINT_TREE_ON_ERROR:
+		if !_single_threaded_mode:
+			# When the worker thread is active we're off the main thread; bounce back before touching the tree.
+			_print_tree_now.call_deferred()
+		else:
+			_print_tree_now()
 
 static func _log_mode_editor(entry:LogStream.LogEntry):
 	var message_format_strings = MESSAGE_FORMAT_STRINGS
@@ -265,9 +318,35 @@ static func _create_stack_string(stack:Array)->String:
 	return stack_trace_message
 
 
+##Shuts down the worker thread and disconnects editor-only hooks. Safe to call repeatedly.
 static func _cleanup():
 	_log_mutex.lock()
 	_is_quitting = true
 	_log_mutex.unlock()
-	if _log_thread.is_started():
+	# Only join the worker when we actually spawned one (runtime mode).
+	if !_single_threaded_mode and _log_thread.is_started():
 		_log_thread.wait_to_finish()
+	_is_thread_started = false
+	_log_thread = Thread.new()
+	_is_quitting = false
+	_front_queue_size = 0
+	if _script_server and _script_server.script_changed.is_connected(_on_script_server_script_changed):
+		_script_server.script_changed.disconnect(_on_script_server_script_changed)
+	_script_server = null
+
+static func _on_script_server_script_changed(script:Script) -> void:
+	if script == null:
+		return
+	if script.resource_path == LOGGER_SCRIPT_PATH:
+		_cleanup()
+
+static func _print_tree_now() -> void:
+	# May be reached via call_deferred() to ensure we run on the main thread before touching the tree.
+	var main_loop = Engine.get_main_loop()
+	if main_loop is SceneTree:
+		var tree: SceneTree = main_loop
+		if tree.root:
+			# Runs on the main thread after call_deferred() so accessing the tree is safe.
+			print("Main tree: ")
+			tree.root.print_tree_pretty()
+			print("")#Print empty line to mark new message
