@@ -49,30 +49,51 @@ func _ready() -> void:
 func debug(message:Variant,values:Variant=null):
 	_LogInternalPrinter._push_to_queue(_log_name, str(message), LogLevel.DEBUG, current_log_level, _crash_behavior, log_message.emit, values)
 
+func debugs(...params):
+	debug(str.callv(params))
+
 ##Shorthand for debug
 func dbg(message:Variant,values:Variant=null):
 	debug(message,values)
+
+func dbgs(...params):
+	debug(str.callv(params))
 
 ##prints a message to the log at the info level.
 func info(message:Variant,values:Variant=null):
 	_LogInternalPrinter._push_to_queue(_log_name, str(message), LogLevel.INFO, current_log_level, _crash_behavior, log_message.emit, values)
 
+func infos(...params):
+	info(str.callv(params))
+
 ##prints a message to the log at the warning level.
 func warn(message:Variant,values:Variant=null):
 	_LogInternalPrinter._push_to_queue(_log_name, str(message), LogLevel.WARN, current_log_level, _crash_behavior, log_message.emit, values)
+
+func warns(...params):
+	warn(str.callv(params))
 
 ##Prints a message to the log at the error level.
 func error(message:Variant,values:Variant=null):
 	_LogInternalPrinter._push_to_queue(_log_name, str(message), LogLevel.ERROR, current_log_level, _crash_behavior, log_message.emit, values)
 
+func errors(...params):
+	error(str.callv(params))
+
 ##Shorthand for error
 func err(message:String,values:Variant=null):
 	error(message,values)
+
+func errs(...params):
+	error(str.callv(params))
 
 ##Prints a message to the log at the fatal level, exits the application 
 ##since there has been a fatal error.
 func fatal(message:Variant,values:Variant=null):
 	_LogInternalPrinter._push_to_queue(_log_name, str(message), LogLevel.FATAL, current_log_level, _crash_behavior, log_message.emit, values)
+
+func fatals(...params):
+	fatal(str.callv(params))
 
 ##Throws an error if err_code is not of value "OK" and appends the error code string.
 func err_cond_not_ok(err_code:Error, message_on_err:String, fatal:=true, other_values_to_be_printed=null):
