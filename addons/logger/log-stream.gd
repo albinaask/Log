@@ -44,10 +44,6 @@ func _init(log_name:String, min_log_level:LogLevel=-1, crash_behavior:Callable =
 	current_log_level = min_log_level
 	_crash_behavior = crash_behavior
 
-func _ready() -> void:
-	if !get_tree().root.tree_exiting.is_connected(_LogInternalPrinter._cleanup):
-		get_tree().root.tree_exiting.connect(_LogInternalPrinter._cleanup)
-
 ##prints a message to the log at the debug level.
 func debug(message:Variant,values:Variant=null):
 	_LogInternalPrinter._push_to_queue(_log_name, str(message), LogLevel.DEBUG, current_log_level, _crash_behavior, log_message.emit, values)
