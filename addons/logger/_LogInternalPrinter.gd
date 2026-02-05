@@ -51,6 +51,11 @@ static func _static_init() -> void:
 	# Runtime builds keep the background worker; editor builds force single-threaded logging.
 	_single_threaded_mode = Engine.is_editor_hint()
 
+	# Cleanup when the game is being exited.
+	if not Engine.is_editor_hint():
+		var tree: SceneTree = Engine.get_main_loop()
+		tree.root.tree_exiting.connect(_cleanup)
+
 	MESSAGE_FORMAT_STRINGS  = [
 		_settings._ensure_setting_exists(_settings.DEBUG_MESSAGE_FORMAT_KEY, _settings.DEBUG_MESSAGE_FORMAT_DEFAULT_VALUE),
 		_settings._ensure_setting_exists(_settings.INFO_MESSAGE_FORMAT_KEY, _settings.INFO_MESSAGE_FORMAT_DEFAULT_VALUE),
